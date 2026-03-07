@@ -1414,3 +1414,105 @@ def pr_guard(path: str, save_baseline_flag: bool, max_drop: int | None, output_f
     )
 
     sys.exit(0 if result.passed else 1)
+
+# ---------------------------------------------------------------------------
+# badge command
+# ---------------------------------------------------------------------------
+
+@cli.command()
+@click.argument("path", default=".", metavar="PATH")
+@click.option(
+    "--output", "output_path", default=None,
+    help="Write the generated SVG badge to a file instead of stdout.",
+)
+@click.option(
+    "--style", "badge_style",
+    type=click.Choice(["flat", "flat-square", "plastic"], case_sensitive=False),
+    default="flat",
+    show_default=True,
+    help="Badge style.",
+)
+@click.option(
+    "--label", "badge_label",
+    default="BenchForge",
+    show_default=True,
+    help="Badge label text.",
+)
+@click.option(
+    "--format", "output_format",
+    type=click.Choice(["text", "json"], case_sensitive=False),
+    default="text",
+    show_default=True,
+    help="Output format: text (default) or json.",
+)
+def badge(path: str, output_path: str | None, badge_style: str, badge_label: str, output_format: str) -> None:
+    """Generate an SVG badge for the current BenchForge score."""
+    from benchforge.core.badge import generate_badge
+
+    try:
+        project_path = _resolve_path(path)
+    except click.BadParameter as exc:
+        err_console.print(f"Error: {exc}")
+        sys.exit(1)
+
+    cfg = _load_project_config(project_path)
+
+    if output_format == "json":
+        try:
+            scan = scan_project(project_path)
+        except NotADirectoryError as exc:
+            click.echo(json.dumps({"error": str(exc)}, indent=2))
+            sys.exit(1)
+
+        if scan.file_count == 0:
+            click.echo(json.dumps({"error": "No files found in the given directory."}, indent=2))
+            sys.exit(0)
+
+        analysis = analyze_project(scan)
+        score = compute_score(analysis, config=cfg)
+        badge_result = generate_badge(score.benchforge_score, label=badge_label, style=badge_style)
+        click.echo(json.dumps({
+            "score": badge_result.score,
+            "label": badge_result.label,
+            "style": badge_result.style,
+            "color": badge_result.color,
+            "svg": badge_result.svg,
+        }, indent=2, ensure_ascii=False))
+        return
+
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[progress.description]{task.description}"),
+        TimeElapsedColumn(),
+        console=console,
+        transient=True,
+    ) as progress:
+        task = progress.add_task("Scanning project...", total=None)
+
+        try:
+            scan = scan_project(project_path)
+        except NotADirectoryError as exc:
+            err_console.print(f"Error: {exc}")
+            sys.exit(1)
+
+        if scan.file_count == 0:
+            console.print("[yellow]No files found in the given directory.[/yellow]")
+            sys.exit(0)
+
+        progress.update(task, description=f"Analyzing {scan.file_count} files...")
+        analysis = analyze_project(scan)
+
+        progress.update(task, description="Computing scores...")
+        score = compute_score(analysis, config=cfg)
+
+        progress.update(task, description="Rendering badge...")
+        badge_result = generate_badge(score.benchforge_score, label=badge_label, style=badge_style)
+
+    if output_path:
+        resolved_output = Path(output_path).resolve()
+        resolved_output.parent.mkdir(parents=True, exist_ok=True)
+        resolved_output.write_text(badge_result.svg, encoding="utf-8")
+        console.print(f"Badge saved to [cyan]{resolved_output}[/cyan]")
+        return
+
+    click.echo(badge_result.svg)
