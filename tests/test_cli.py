@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
@@ -100,6 +101,75 @@ class TestReportCommand:
         )
         assert result.exit_code == 0
         assert output.exists()
+
+
+class TestAnalyzeJsonFormat:
+    def test_json_format_valid_json(
+        self, runner: CliRunner, single_file_project: Path
+    ) -> None:
+        result = runner.invoke(cli, ["analyze", str(single_file_project), "--format", "json"])
+        assert result.exit_code == 0
+        data = json.loads(result.output)
+        assert isinstance(data, dict)
+
+    def test_json_format_top_level_keys(
+        self, runner: CliRunner, single_file_project: Path
+    ) -> None:
+        result = runner.invoke(cli, ["analyze", str(single_file_project), "--format", "json"])
+        assert result.exit_code == 0
+        data = json.loads(result.output)
+        assert "scan" in data
+        assert "analysis" in data
+        assert "score" in data
+
+    def test_json_format_score_fields(
+        self, runner: CliRunner, single_file_project: Path
+    ) -> None:
+        result = runner.invoke(cli, ["analyze", str(single_file_project), "--format", "json"])
+        assert result.exit_code == 0
+        score = json.loads(result.output)["score"]
+        assert "benchforge_score" in score
+        assert "performance" in score
+        assert "maintainability" in score
+        assert "memory" in score
+        assert isinstance(score["benchforge_score"], int)
+
+    def test_json_format_analysis_fields(
+        self, runner: CliRunner, single_file_project: Path
+    ) -> None:
+        result = runner.invoke(cli, ["analyze", str(single_file_project), "--format", "json"])
+        assert result.exit_code == 0
+        analysis = json.loads(result.output)["analysis"]
+        assert "total_issues" in analysis
+        assert "issues" in analysis
+        assert isinstance(analysis["issues"], list)
+
+    def test_json_format_scan_fields(
+        self, runner: CliRunner, single_file_project: Path
+    ) -> None:
+        result = runner.invoke(cli, ["analyze", str(single_file_project), "--format", "json"])
+        assert result.exit_code == 0
+        scan = json.loads(result.output)["scan"]
+        assert "file_count" in scan
+        assert "root" in scan
+        assert scan["file_count"] >= 1
+
+    def test_json_format_fixtures_dir(
+        self, runner: CliRunner, fixtures_dir: Path
+    ) -> None:
+        result = runner.invoke(cli, ["analyze", str(fixtures_dir), "--format", "json"])
+        assert result.exit_code == 0
+        data = json.loads(result.output)
+        assert data["analysis"]["total_issues"] >= 0
+
+    def test_text_format_is_default(
+        self, runner: CliRunner, single_file_project: Path
+    ) -> None:
+        result = runner.invoke(cli, ["analyze", str(single_file_project)])
+        assert result.exit_code == 0
+        # Default text output — must NOT be parseable as JSON top-level object with our keys
+        # (rich adds ANSI / table formatting, not raw JSON)
+        assert "BenchForge" in result.output or "Score" in result.output
 
 
 class TestBenchmarkCommand:

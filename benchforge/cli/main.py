@@ -14,6 +14,7 @@ Business logic lives in core modules. This file handles only:
 from __future__ import annotations
 
 import io
+import json
 import sys
 from pathlib import Path
 
@@ -35,6 +36,62 @@ if sys.stderr.encoding and sys.stderr.encoding.lower() != "utf-8":
 
 console = Console(highlight=False)
 err_console = Console(stderr=True, style="bold red", highlight=False)
+
+
+# ---------------------------------------------------------------------------
+# JSON serialization helpers
+# ---------------------------------------------------------------------------
+
+def _scan_to_dict(scan: "ScanResult") -> dict:
+    return {
+        "root": str(scan.root),
+        "file_count": scan.file_count,
+        "primary_language": scan.primary_language,
+        "total_size_kb": scan.total_size_kb,
+        "modules": scan.modules,
+        "languages": scan.languages,
+    }
+
+
+def _analysis_to_dict(analysis: "AnalysisResult") -> dict:
+    issues = []
+    for fa in analysis.files:
+        for issue in fa.issues:
+            issues.append({
+                "category": issue.category,
+                "severity": issue.severity,
+                "file": issue.file,
+                "line": issue.line,
+                "description": issue.description,
+            })
+    return {
+        "total_issues": analysis.total_issues,
+        "issue_breakdown": analysis.issue_breakdown,
+        "avg_complexity": analysis.avg_complexity,
+        "avg_maintainability": analysis.avg_maintainability,
+        "issues": issues,
+    }
+
+
+def _score_to_dict(score: "ScoreResult") -> dict:
+    return {
+        "performance": score.performance,
+        "maintainability": score.maintainability,
+        "memory": score.memory,
+        "benchforge_score": score.benchforge_score,
+        "has_benchmark_data": score.has_benchmark_data,
+        "score_notes": score.score_notes,
+    }
+
+
+def _print_json_output(scan: "ScanResult", analysis: "AnalysisResult", score: "ScoreResult") -> None:
+    """Emit analysis results as a single JSON object to stdout."""
+    payload = {
+        "scan": _scan_to_dict(scan),
+        "analysis": _analysis_to_dict(analysis),
+        "score": _score_to_dict(score),
+    }
+    click.echo(json.dumps(payload, indent=2, ensure_ascii=False))
 
 
 # ---------------------------------------------------------------------------
@@ -184,7 +241,14 @@ def _print_ai_insight(insight: object) -> None:
 @click.argument("path", default=".", metavar="PATH")
 @click.option("--ai", "use_ai", is_flag=True, default=False,
               help="Run AI interpretation (requires MISTRAL_API_KEY).")
-def analyze(path: str, use_ai: bool) -> None:
+@click.option(
+    "--format", "output_format",
+    type=click.Choice(["text", "json"], case_sensitive=False),
+    default="text",
+    show_default=True,
+    help="Output format: text (default) or json.",
+)
+def analyze(path: str, use_ai: bool, output_format: str) -> None:
     """Analyze a project directory for code quality issues.
 
     PATH defaults to the current directory.
@@ -195,7 +259,8 @@ def analyze(path: str, use_ai: bool) -> None:
         err_console.print(f"Error: {exc}")
         sys.exit(1)
 
-    console.print(f"\n[bold]BenchForge[/bold] — analyzing [cyan]{project_path}[/cyan]\n")
+    if output_format == "text":
+        console.print(f"\n[bold]BenchForge[/bold] — analyzing [cyan]{project_path}[/cyan]\n")
 
     # Scanner
     try:
@@ -205,17 +270,23 @@ def analyze(path: str, use_ai: bool) -> None:
         sys.exit(1)
 
     if scan.file_count == 0:
-        console.print("[yellow]No files found in the given directory.[/yellow]")
+        if output_format == "json":
+            click.echo(json.dumps({"error": "No files found in the given directory."}, indent=2))
+        else:
+            console.print("[yellow]No files found in the given directory.[/yellow]")
         sys.exit(0)
 
-    _print_scan_summary(scan)
-
-    # Analyzer
+    # Analyzer + Scoring (always run regardless of format)
     analysis = analyze_project(scan)
-    _print_issues(analysis)
-
-    # Scoring
     score = compute_score(analysis)
+
+    if output_format == "json":
+        _print_json_output(scan, analysis, score)
+        return
+
+    # --- text output ---
+    _print_scan_summary(scan)
+    _print_issues(analysis)
     _print_scores(score)
 
     # Optional AI interpretation
