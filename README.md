@@ -424,12 +424,28 @@ For runtime performance, use `benchforge benchmark .` to add actual measurement 
 
 The `--ai` flag sends analysis metadata (scores, issue counts, file names) to Mistral AI for a plain-language interpretation. No source code is transmitted — only structured analysis results.
 
-To enable:
+The AI output is framed as observations and suggestions, not verdicts. It interprets the same heuristic signals BenchForge already reports — it does not add new analysis or override scores.
+
+**Setup — one-time per session:**
 
 ```bash
 export MISTRAL_API_KEY=your_key_here   # Linux / macOS
 set MISTRAL_API_KEY=your_key_here      # Windows CMD
 $env:MISTRAL_API_KEY="your_key_here"   # Windows PowerShell
+```
+
+**Setup — persistent (recommended):**
+
+Create a `.env` file in the project root (never commit it — it is gitignored):
+
+```
+MISTRAL_API_KEY=your_key_here
+```
+
+On Windows PowerShell, load it with the included helper:
+
+```powershell
+. .\load_env.ps1
 ```
 
 Get a free API key at [console.mistral.ai](https://console.mistral.ai). The tool works fully without it — AI insight is additive, not required.

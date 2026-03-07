@@ -60,6 +60,14 @@
 - BOM fix — files saved as UTF-8 with BOM (U+FEFF) are now parsed correctly
   (`utf-8-sig` encoding); previously caused false parse errors in the HTML report
 
+## v1.7 ✅
+
+- Mistral AI `--ai` flag fully integrated and end-to-end tested
+- AI prompt reframed — output is observations and suggestions, not verdicts
+- Fixed `unused_import` false positive for imports inside `if TYPE_CHECKING:` blocks
+- `.env` and `.benchforge_baseline.json` added to `.gitignore`
+- `load_env.ps1` helper for loading API key on Windows PowerShell
+
 ## Next
 
 - Consider separate reporting for production code vs test code
