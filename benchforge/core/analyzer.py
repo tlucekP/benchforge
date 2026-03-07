@@ -57,6 +57,30 @@ class AnalysisResult:
     duplicate_groups: list[list[str]] = field(default_factory=list)
 
 
+_TEST_PATH_SEGMENTS = {"tests", "test"}
+_TEST_FILE_PREFIXES = ("test_",)
+_TEST_FILE_SUFFIXES = ("_test.py",)
+
+
+def _is_test_file(path: str) -> bool:
+    """Return True if the file path matches common test file conventions.
+
+    Checks:
+    - filename starts with 'test_' or ends with '_test.py'
+    - any parent directory segment is 'tests' or 'test'
+    """
+    from pathlib import PurePosixPath, PureWindowsPath
+    parts = PurePosixPath(path.replace("\\", "/")).parts
+    name = parts[-1] if parts else ""
+    if any(name.startswith(p) for p in _TEST_FILE_PREFIXES):
+        return True
+    if any(name.endswith(s) for s in _TEST_FILE_SUFFIXES):
+        return True
+    if any(seg in _TEST_PATH_SEGMENTS for seg in parts[:-1]):
+        return True
+    return False
+
+
 _SMALL_STATIC_ITERABLE_LIMIT = 16
 
 

@@ -58,6 +58,45 @@ class TestAnalyzeCommand:
             assert result.exit_code in (0, 1)
             assert result.exception is None or isinstance(result.exception, SystemExit)
 
+    def test_show_test_issues_flag_accepted(
+        self, runner: CliRunner, tmp_path: Path
+    ) -> None:
+        """--show-test-issues flag should be accepted without error."""
+        (tmp_path / "main.py").write_text("def run():\n    return 1\n", encoding="utf-8")
+        result = runner.invoke(cli, ["analyze", str(tmp_path), "--show-test-issues"])
+        assert result.exit_code == 0
+
+    def test_test_issues_hidden_by_default(
+        self, runner: CliRunner, tmp_path: Path
+    ) -> None:
+        """Issues in test files should be hidden by default and show a footer hint."""
+        # prod file — clean, no issues
+        (tmp_path / "main.py").write_text("def run():\n    return 1\n", encoding="utf-8")
+        # test file at root level (not in tests/ dir so scanner includes it)
+        # long function triggers long_function issue
+        (tmp_path / "test_main.py").write_text(
+            "def test_run():\n" + "    assert True\n" * 55,
+            encoding="utf-8",
+        )
+        result = runner.invoke(cli, ["analyze", str(tmp_path)])
+        assert result.exit_code == 0
+        # test_main.py issues should be hidden — either hidden footer or no issues shown
+        assert "test_main.py" not in result.output
+
+    def test_show_test_issues_reveals_test_issues(
+        self, runner: CliRunner, tmp_path: Path
+    ) -> None:
+        """--show-test-issues should include test file issues when they appear in the scan."""
+        # Place test file alongside prod file (no tests/ dir — scanner won't auto-exclude it)
+        (tmp_path / "main.py").write_text("def run():\n    return 1\n", encoding="utf-8")
+        (tmp_path / "test_main.py").write_text(
+            "def test_run():\n" + "    assert True\n" * 55,
+            encoding="utf-8",
+        )
+        result = runner.invoke(cli, ["analyze", str(tmp_path), "--show-test-issues"])
+        assert result.exit_code == 0
+        assert "test_main.py" in result.output
+
 
 class TestReportCommand:
     def test_report_creates_html_file(

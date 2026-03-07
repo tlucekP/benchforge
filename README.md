@@ -193,6 +193,7 @@ benchforge analyze .                        # text output
 benchforge analyze . --format json          # JSON output
 benchforge analyze . --heatmap              # show file heatmap
 benchforge analyze . --heatmap --top 20     # top 20 hottest files
+benchforge analyze . --show-test-issues     # include test file issues (hidden by default)
 benchforge analyze . --ai                   # add AI insight (requires MISTRAL_API_KEY)
 ```
 

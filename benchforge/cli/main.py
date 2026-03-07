@@ -181,33 +181,50 @@ def _print_scores(score: ScoreResult) -> None:
         )
 
 
-def _print_issues(analysis: AnalysisResult) -> None:
+def _print_issues(analysis: AnalysisResult, show_test: bool = False) -> None:
+    from benchforge.core.analyzer import _is_test_file
     all_issues = [issue for fa in analysis.files for issue in fa.issues]
 
     if not all_issues:
         console.print("[green]No issues detected.[/green]")
         return
 
-    table = Table(title=f"Detected Issues ({len(all_issues)})", box=box.ROUNDED)
-    table.add_column("Severity", width=8)
-    table.add_column("Category")
-    table.add_column("File")
-    table.add_column("Line", justify="right", width=6)
-    table.add_column("Description")
+    if show_test:
+        visible = all_issues
+        hidden_count = 0
+    else:
+        visible = [i for i in all_issues if not _is_test_file(i.file)]
+        hidden_count = len(all_issues) - len(visible)
 
-    severity_colors = {"error": "red", "warning": "yellow", "info": "blue"}
+    if not visible:
+        console.print("[green]No issues detected in production code.[/green]")
+    else:
+        table = Table(title=f"Detected Issues ({len(visible)})", box=box.ROUNDED)
+        table.add_column("Severity", width=8)
+        table.add_column("Category")
+        table.add_column("File")
+        table.add_column("Line", justify="right", width=6)
+        table.add_column("Description")
 
-    for issue in sorted(all_issues, key=lambda i: (i.file, i.line or 0)):
-        color = severity_colors.get(issue.severity, "white")
-        table.add_row(
-            f"[{color}]{issue.severity}[/{color}]",
-            issue.category,
-            issue.file,
-            str(issue.line) if issue.line else "â€”",
-            issue.description,
+        severity_colors = {"error": "red", "warning": "yellow", "info": "blue"}
+
+        for issue in sorted(visible, key=lambda i: (i.file, i.line or 0)):
+            color = severity_colors.get(issue.severity, "white")
+            table.add_row(
+                f"[{color}]{issue.severity}[/{color}]",
+                issue.category,
+                issue.file,
+                str(issue.line) if issue.line else "â€”",
+                issue.description,
+            )
+
+        console.print(table)
+
+    if hidden_count > 0:
+        console.print(
+            f"[dim]{hidden_count} issue(s) in test files hidden."
+            " Use [bold]--show-test-issues[/bold] to include them.[/dim]"
         )
-
-    console.print(table)
 
 
 # ---------------------------------------------------------------------------
@@ -310,7 +327,11 @@ def _print_ai_insight(insight: object) -> None:
     "--top", "heatmap_top", default=10, show_default=True,
     help="Number of files to show in heatmap (used with --heatmap).",
 )
-def analyze(path: str, use_ai: bool, output_format: str, show_heatmap: bool, heatmap_top: int) -> None:
+@click.option(
+    "--show-test-issues", "show_test_issues", is_flag=True, default=False,
+    help="Include issues from test files in the output (hidden by default).",
+)
+def analyze(path: str, use_ai: bool, output_format: str, show_heatmap: bool, heatmap_top: int, show_test_issues: bool) -> None:
     """Analyze a project directory for code quality issues.
 
     PATH defaults to the current directory.
@@ -371,7 +392,7 @@ def analyze(path: str, use_ai: bool, output_format: str, show_heatmap: bool, hea
         console.print(f"[dim]Config: {cfg.config_path}[/dim]\n")
 
     _print_scan_summary(scan)
-    _print_issues(analysis)
+    _print_issues(analysis, show_test=show_test_issues)
     _print_scores(score)
 
     if show_heatmap:

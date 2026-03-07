@@ -9,6 +9,7 @@ import pytest
 
 from benchforge.core.analyzer import (
     _is_safe_inner_iterable,
+    _is_test_file,
     analyze_file,
     analyze_project,
     AnalysisResult,
@@ -56,6 +57,35 @@ class TestIsSafeInnerIterable:
 
     def test_nested_attribute_access_is_safe(self) -> None:
         assert _is_safe_inner_iterable(self._parse_expr("node.children")) is True
+
+
+class TestIsTestFile:
+    def test_test_prefix_filename(self) -> None:
+        assert _is_test_file("test_main.py") is True
+
+    def test_test_suffix_filename(self) -> None:
+        assert _is_test_file("main_test.py") is True
+
+    def test_tests_directory(self) -> None:
+        assert _is_test_file("tests/test_main.py") is True
+
+    def test_test_directory(self) -> None:
+        assert _is_test_file("test/test_main.py") is True
+
+    def test_windows_path_separator(self) -> None:
+        assert _is_test_file("tests\\test_main.py") is True
+
+    def test_nested_tests_directory(self) -> None:
+        assert _is_test_file("src/tests/test_utils.py") is True
+
+    def test_prod_file_not_detected(self) -> None:
+        assert _is_test_file("main.py") is False
+
+    def test_prod_file_in_src(self) -> None:
+        assert _is_test_file("src/core/analyzer.py") is False
+
+    def test_file_with_test_in_name_but_not_prefix(self) -> None:
+        assert _is_test_file("context.py") is False
 
 
 class TestAnalyzeFile:

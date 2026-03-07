@@ -68,7 +68,12 @@
 - `.env` and `.benchforge_baseline.json` added to `.gitignore`
 - `load_env.ps1` helper for loading API key on Windows PowerShell
 
+## v1.8 ✅
+
+- `benchforge analyze . --show-test-issues` — test file issues hidden by default, opt-in via flag
+- Convention-based test file detection (`test_*.py`, `*_test.py`, `tests/`, `test/` directories)
+- Footer hint shown when test issues are hidden
+
 ## Next
 
-- Consider separate reporting for production code vs test code
 - Improve docs/examples for multi-language and monorepo setups
