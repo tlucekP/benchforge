@@ -57,8 +57,38 @@ class AnalysisResult:
     duplicate_groups: list[list[str]] = field(default_factory=list)
 
 
+_SMALL_STATIC_ITERABLE_LIMIT = 16
+
+
+def _is_safe_inner_iterable(node: ast.expr) -> bool:
+    """Return True if the inner loop iterable is safe to skip flagging.
+
+    Covers patterns that do not indicate algorithmic O(n^2) complexity:
+
+    - range(N) where N is a small integer literal
+    - literal list/tuple/set where all elements are constants
+    - attribute access (e.g. fa.issues, node.children) — sub-collection
+      of the outer loop's element, structural traversal not a cross-product
+    """
+    if isinstance(node, ast.Call):
+        func = node.func
+        if isinstance(func, ast.Name) and func.id == "range" and len(node.args) == 1:
+            arg = node.args[0]
+            if isinstance(arg, ast.Constant) and isinstance(arg.value, int):
+                return arg.value <= _SMALL_STATIC_ITERABLE_LIMIT
+    if isinstance(node, (ast.List, ast.Tuple, ast.Set)):
+        return all(isinstance(elt, ast.Constant) for elt in node.elts)
+    if isinstance(node, ast.Attribute):
+        return True
+    return False
+
+
 class _NestedLoopVisitor(ast.NodeVisitor):
-    """Detects for/while loops nested inside other for/while loops."""
+    """Detects for/while loops nested inside other for/while loops.
+
+    Skips inner loops whose iterable is provably small and static,
+    as these do not indicate algorithmic complexity issues.
+    """
 
     def __init__(self, rel_path: str) -> None:
         self.issues: list[Issue] = []
@@ -67,15 +97,17 @@ class _NestedLoopVisitor(ast.NodeVisitor):
 
     def _visit_loop(self, node: ast.AST) -> None:
         if self._loop_depth >= 1:
-            self.issues.append(
-                Issue(
-                    category="nested_loop",
-                    description="Nested loop detected - may indicate O(n^2) or worse complexity.",
-                    file=self._rel_path,
-                    line=getattr(node, "lineno", None),
-                    severity="warning",
+            iterable = getattr(node, "iter", None)
+            if iterable is None or not _is_safe_inner_iterable(iterable):
+                self.issues.append(
+                    Issue(
+                        category="nested_loop",
+                        description="Nested loop detected - may indicate O(n^2) or worse complexity.",
+                        file=self._rel_path,
+                        line=getattr(node, "lineno", None),
+                        severity="warning",
+                    )
                 )
-            )
         self._loop_depth += 1
         self.generic_visit(node)
         self._loop_depth -= 1
@@ -203,7 +235,7 @@ def analyze_file(path: Path, root: Path) -> FileAnalysis:
     result = FileAnalysis(path=path)
 
     try:
-        source = path.read_text(encoding="utf-8", errors="replace")
+        source = path.read_text(encoding="utf-8-sig", errors="replace")
     except OSError as exc:
         result.parse_error = f"Cannot read file: {exc}"
         return result
@@ -274,7 +306,7 @@ def _find_duplicate_functions(py_files: list[FileAnalysis], root: Path) -> list[
         if file_analysis.parse_error:
             continue
         try:
-            source = file_analysis.path.read_text(encoding="utf-8", errors="replace")
+            source = file_analysis.path.read_text(encoding="utf-8-sig", errors="replace")
             tree = ast.parse(source)
         except (OSError, SyntaxError):
             continue

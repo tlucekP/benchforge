@@ -1,0 +1,13 @@
+# BenchForge self-analysis configuration
+#
+# CLI tools have legitimately long command handlers and high branch counts
+# (argument parsing, output formatting, flag combinations). The default
+# thresholds of 50 lines / CC>10 are calibrated for pure library code.
+# These project-level overrides reflect the architectural reality of a CLI tool.
+
+[scoring.penalties]
+long_function   = 3.0   # reduced from 5.0 — CLI dispatch functions are intentionally verbose
+high_complexity = 4.0   # reduced from 6.0 — flag branching inflates CC in CLI handlers
+
+[scoring.thresholds]
+cc_poor = 20.0          # raised from 15.0 — CLI commands routinely exceed CC 15

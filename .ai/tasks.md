@@ -6,21 +6,7 @@ Long-term planning is described in roadmap.md.
 
 ---
 
-## 1. Improve nested loop detection
-
-Goal
-
-Reduce structural false positives while keeping nested loop detection useful.
-
-Focus
-
-- detect real algorithmic complexity
-- avoid flagging simple structural loops
-- test on real-world repositories
-
----
-
-## 2. Separate reporting for production vs test code
+## 1. Separate reporting for production vs test code
 
 Goal
 
@@ -34,7 +20,7 @@ Focus
 
 ---
 
-## 3. Documentation improvements
+## 2. Documentation improvements
 
 Goal
 

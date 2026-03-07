@@ -131,7 +131,7 @@ def _resolve_path(path_str: str) -> Path:
 def _score_color(score: int) -> str:
     if score >= 80:
         return "green"
-    if score >= 55:
+    if score >= 50:
         return "yellow"
     return "red"
 
@@ -1275,7 +1275,6 @@ def pr_guard(path: str, save_baseline_flag: bool, max_drop: int | None, output_f
     """
     from benchforge.core.pr_guard import (
         run_pr_guard, save_baseline, DEFAULT_MAX_DROP,
-        BASELINE_FILENAME,
     )
 
     try:

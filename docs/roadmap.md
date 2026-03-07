@@ -51,8 +51,16 @@
   - `from __future__ import annotations` ignored in unused-import detection
   - tiny duplicate helpers and pytest fixtures ignored by duplicate detection
 
+## v1.6 ✅
+
+- Smarter `nested_loop` detection — inner loops over provably small/static iterables
+  (`range(N≤16)`, literal lists/tuples/sets) are no longer flagged as false positives
+- Smarter `nested_loop` detection (phase 2) — inner loops over attribute access
+  (`obj.attr`) are skipped as structural traversal, not algorithmic complexity
+- BOM fix — files saved as UTF-8 with BOM (U+FEFF) are now parsed correctly
+  (`utf-8-sig` encoding); previously caused false parse errors in the HTML report
+
 ## Next
 
-- Refine `nested_loop` so it stays useful while avoiding structural false positives
 - Consider separate reporting for production code vs test code
 - Improve docs/examples for multi-language and monorepo setups

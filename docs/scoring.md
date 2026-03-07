@@ -164,11 +164,20 @@ Result is rounded to the nearest integer.
 
 ### Interpretation guide
 
-| Score | Grade | Meaning |
+| Score | Color | Meaning |
 |---|---|---|
-| 80-100 | Good | Production-ready quality |
-| 55-79 | OK | Acceptable, targeted improvements recommended |
-| 0-54 | Poor | Significant quality issues detected |
+| 80-100 | green | Clean code, low issue density |
+| 50-79 | yellow | Moderate issues — worth reviewing |
+| 0-49 | red | High issue density — significant structural concerns |
+
+> **Important:** These are signal levels, not verdicts. A score of 55 on a large
+> CLI tool with rich formatting logic is not the same as 55 on a small utility
+> library. Use the score as a starting point for investigation, not a final
+> judgment about your code quality.
+>
+> If the defaults feel wrong for your project type (CLI tools, frameworks,
+> data pipelines), use `.benchforge.toml` to tune penalties and thresholds.
+> BenchForge ships with its own `.benchforge.toml` as a working example.
 
 ---
 
@@ -178,14 +187,40 @@ Issues are detected by static AST analysis - no code is executed.
 
 | Issue category | Detector | Severity | Notes |
 |---|---|---|---|
-| `nested_loop` | AST loop depth visitor | warning | currently purely structural |
+| `nested_loop` | AST loop depth visitor | warning | skips inner loops that are provably structural (see below) |
 | `long_function` | AST line count (threshold: 50 lines) | warning | applies to functions and methods |
 | `unused_import` | AST import/name visitor | warning | ignores `from __future__ import annotations` |
 | `high_complexity` | radon cyclomatic complexity (threshold: > 10) | warning | per function/method |
 | `duplicate_code` | SHA-256 hash of normalized function bodies | info | ignores pytest fixtures and very short helpers |
 
-The duplicate-code detector now intentionally ignores tiny helper functions and
+The duplicate-code detector intentionally ignores tiny helper functions and
 pytest fixtures to reduce noise in test-heavy repositories.
+
+### nested_loop detection detail
+
+The `nested_loop` detector flags `for`/`while` loops that are nested inside
+another loop. However, not all nested loops indicate algorithmic complexity
+issues. The detector skips the following inner loop patterns:
+
+**Skipped (not flagged):**
+
+| Pattern | Example | Reason |
+|---|---|---|
+| `range(N)` where N ≤ 16 | `for i in range(4)` | Fixed small bound, not O(n²) |
+| Literal collection | `for k in ('x', 'y', 'z')` | Constant size, not data-dependent |
+| Attribute access | `for issue in fa.issues` | Sub-collection of outer element, structural traversal |
+
+**Still flagged:**
+
+| Pattern | Example | Reason |
+|---|---|---|
+| `range(len(items))` | `for j in range(len(data))` | Dynamic bound, potentially O(n²) |
+| Same/different variable | `for j in items` | Cannot prove independence from outer loop |
+| Function calls | `for x in ast.walk(tree)` | Cannot bound at analysis time |
+
+**Known limitation:** plain variable iterables (`for x in some_list`) that are
+genuinely independent of the outer loop cannot be distinguished from true O(n²)
+cross-products without type information. These are flagged conservatively.
 
 ---
 

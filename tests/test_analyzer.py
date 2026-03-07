@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import ast
 from pathlib import Path
 
 import pytest
 
 from benchforge.core.analyzer import (
+    _is_safe_inner_iterable,
     analyze_file,
     analyze_project,
     AnalysisResult,
@@ -14,6 +16,46 @@ from benchforge.core.analyzer import (
     Issue,
 )
 from benchforge.core.scanner import scan_project
+
+
+class TestIsSafeInnerIterable:
+    """Unit tests for the _is_safe_inner_iterable helper."""
+
+    def _parse_expr(self, src: str) -> ast.expr:
+        return ast.parse(src, mode="eval").body
+
+    def test_small_range_is_safe(self) -> None:
+        assert _is_safe_inner_iterable(self._parse_expr("range(4)")) is True
+
+    def test_range_at_limit_is_safe(self) -> None:
+        assert _is_safe_inner_iterable(self._parse_expr("range(16)")) is True
+
+    def test_range_over_limit_is_not_safe(self) -> None:
+        assert _is_safe_inner_iterable(self._parse_expr("range(17)")) is False
+
+    def test_range_with_dynamic_arg_is_not_safe(self) -> None:
+        assert _is_safe_inner_iterable(self._parse_expr("range(n)")) is False
+
+    def test_range_len_is_not_safe(self) -> None:
+        assert _is_safe_inner_iterable(self._parse_expr("range(len(items))")) is False
+
+    def test_literal_tuple_is_safe(self) -> None:
+        assert _is_safe_inner_iterable(self._parse_expr("('a', 'b', 'c')")) is True
+
+    def test_literal_list_is_safe(self) -> None:
+        assert _is_safe_inner_iterable(self._parse_expr("[1, 2, 3]")) is True
+
+    def test_mixed_tuple_with_variable_is_not_safe(self) -> None:
+        assert _is_safe_inner_iterable(self._parse_expr("('a', x)")) is False
+
+    def test_variable_is_not_safe(self) -> None:
+        assert _is_safe_inner_iterable(self._parse_expr("items")) is False
+
+    def test_attribute_access_is_safe(self) -> None:
+        assert _is_safe_inner_iterable(self._parse_expr("fa.issues")) is True
+
+    def test_nested_attribute_access_is_safe(self) -> None:
+        assert _is_safe_inner_iterable(self._parse_expr("node.children")) is True
 
 
 class TestAnalyzeFile:
@@ -155,6 +197,71 @@ class TestAnalyzeProject:
         scan = scan_project(tmp_path)
         result = analyze_project(scan)
         assert result.issue_breakdown.get("duplicate_code", 0) == 0
+
+    def test_nested_loop_small_range_not_flagged(self, tmp_path: Path) -> None:
+        f = tmp_path / "small_range.py"
+        f.write_text(
+            "def process(data):\n"
+            "    for item in data:\n"
+            "        for i in range(4):\n"
+            "            print(item, i)\n",
+            encoding="utf-8",
+        )
+        result = analyze_file(f, root=tmp_path)
+        categories = [i.category for i in result.issues]
+        assert "nested_loop" not in categories
+
+    def test_nested_loop_large_range_flagged(self, tmp_path: Path) -> None:
+        f = tmp_path / "large_range.py"
+        f.write_text(
+            "def process(data):\n"
+            "    for item in data:\n"
+            "        for i in range(len(data)):\n"
+            "            print(item, i)\n",
+            encoding="utf-8",
+        )
+        result = analyze_file(f, root=tmp_path)
+        categories = [i.category for i in result.issues]
+        assert "nested_loop" in categories
+
+    def test_nested_loop_literal_tuple_not_flagged(self, tmp_path: Path) -> None:
+        f = tmp_path / "literal_tuple.py"
+        f.write_text(
+            "def process(sections):\n"
+            "    for section in sections:\n"
+            "        for key in ('a', 'b', 'c'):\n"
+            "            print(section, key)\n",
+            encoding="utf-8",
+        )
+        result = analyze_file(f, root=tmp_path)
+        categories = [i.category for i in result.issues]
+        assert "nested_loop" not in categories
+
+    def test_nested_loop_dynamic_iterable_flagged(self, tmp_path: Path) -> None:
+        f = tmp_path / "dynamic.py"
+        f.write_text(
+            "def find_pairs(items):\n"
+            "    for i in items:\n"
+            "        for j in items:\n"
+            "            print(i, j)\n",
+            encoding="utf-8",
+        )
+        result = analyze_file(f, root=tmp_path)
+        categories = [i.category for i in result.issues]
+        assert "nested_loop" in categories
+
+    def test_nested_loop_attribute_access_not_flagged(self, tmp_path: Path) -> None:
+        f = tmp_path / "attr_traversal.py"
+        f.write_text(
+            "def process(files):\n"
+            "    for fa in files:\n"
+            "        for issue in fa.issues:\n"
+            "            print(issue)\n",
+            encoding="utf-8",
+        )
+        result = analyze_file(f, root=tmp_path)
+        categories = [i.category for i in result.issues]
+        assert "nested_loop" not in categories
 
     def test_meaningful_duplicate_functions_are_detected(self, tmp_path: Path) -> None:
         left = tmp_path / "left.py"

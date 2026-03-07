@@ -8,8 +8,8 @@ Before analyzing the repository, read:
 - architecture.md
 - coding_rules.md
 - tasks.md
-
-
+  
+  
 
 ## Project: BenchForge
 
@@ -47,6 +47,8 @@ tests/
 Rule:
 Prefer simple and readable code.
 Performance optimizations are welcome but must not reduce readability.
+
+Always keep docs updated.
 
 # AI Instructions
 
