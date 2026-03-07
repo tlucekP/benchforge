@@ -589,6 +589,150 @@ def report(path: str, output: str, use_ai: bool) -> None:
 
 
 # ---------------------------------------------------------------------------
+# roast command
+# ---------------------------------------------------------------------------
+
+@cli.command()
+@click.argument("path", default=".", metavar="PATH")
+@click.option("--ai", "use_ai", is_flag=True, default=False,
+              help="Enrich roast with AI commentary (requires MISTRAL_API_KEY).")
+@click.option("--seed", default=None, type=int,
+              help="Random seed for reproducible roast output.")
+def roast(path: str, use_ai: bool, seed: int | None) -> None:
+    """Roast your code — fun but honest quality insights.
+
+    PATH defaults to the current directory.
+    """
+    from benchforge.core.roast import roast_project, RoastResult
+
+    try:
+        project_path = _resolve_path(path)
+    except click.BadParameter as exc:
+        err_console.print(f"Error: {exc}")
+        sys.exit(1)
+
+    console.print(f"\n[bold]BenchForge Roast[/bold] — [cyan]{project_path}[/cyan]\n")
+
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[progress.description]{task.description}"),
+        TimeElapsedColumn(),
+        console=console,
+        transient=True,
+    ) as progress:
+        task = progress.add_task("Scanning project...", total=None)
+
+        try:
+            scan = scan_project(project_path)
+        except NotADirectoryError as exc:
+            err_console.print(f"Error: {exc}")
+            sys.exit(1)
+
+        if scan.file_count == 0:
+            console.print("[yellow]No files found — nothing to roast.[/yellow]")
+            sys.exit(0)
+
+        progress.update(task, description=f"Analyzing {scan.file_count} files...")
+        analysis = analyze_project(scan)
+
+        progress.update(task, description="Computing scores...")
+        cfg = _load_project_config(project_path)
+        score = compute_score(analysis, config=cfg)
+
+        progress.update(task, description="Preparing roast...")
+        result: RoastResult = roast_project(analysis, score, seed=seed)
+
+    _print_roast(result)
+
+    # Optional AI enrichment
+    if use_ai:
+        from benchforge.ai.interpreter import interpret, _is_available
+        from benchforge.report.html_report import build_report_data
+        if not _is_available():
+            console.print("[yellow]AI: MISTRAL_API_KEY not set — skipping AI roast.[/yellow]")
+        else:
+            console.print("\n[dim]Requesting AI commentary...[/dim]")
+            scan_summary = {
+                "file_count": scan.file_count,
+                "primary_language": scan.primary_language,
+                "total_size_kb": scan.total_size_kb,
+                "modules": scan.modules,
+                "languages": scan.languages,
+            }
+            report_data = build_report_data(
+                project_path=project_path,
+                scan_summary=scan_summary,
+                analysis=analysis,
+                score=score,
+            )
+            insight = interpret(report_data)
+            if insight:
+                _print_ai_insight(insight)
+
+
+def _print_roast(result: "RoastResult") -> None:
+    """Render the roast output to the terminal."""
+    from benchforge.core.roast import RoastResult
+    assert isinstance(result, RoastResult)
+
+    category_icons = {
+        "nested_loop":     "🔁",
+        "long_function":   "📜",
+        "unused_import":   "👻",
+        "high_complexity": "🌀",
+        "duplicate_code":  "📋",
+        "score":           "🎯",
+        "clean":           "✨",
+    }
+
+    lines_to_print = [line for line in result.lines if line.category != "score"]
+    score_lines = [line for line in result.lines if line.category == "score"]
+
+    if result.is_clean:
+        console.print(
+            Panel(
+                "[green]No issues detected.[/green]\n\n"
+                + (result.lines[-1].message if result.lines else ""),
+                title="[bold yellow]BenchForge Roast[/bold yellow]",
+                border_style="yellow",
+                expand=False,
+            )
+        )
+        return
+
+    # Issue roasts
+    roast_text_lines = []
+    for line in lines_to_print:
+        icon = category_icons.get(line.category, "•")
+        roast_text_lines.append(f"{icon}  {line.message}")
+
+    if result.hottest_file:
+        roast_text_lines.append(f"\n[dim]Hottest file: [bold]{result.hottest_file}[/bold][/dim]")
+
+    console.print(
+        Panel(
+            "\n".join(roast_text_lines),
+            title="[bold yellow]BenchForge Roast[/bold yellow]",
+            border_style="yellow",
+            expand=False,
+        )
+    )
+
+    # Score verdict
+    if score_lines:
+        s = result.score
+        color = _score_color(s)
+        console.print(
+            Panel(
+                f"[{color}]{score_lines[0].message}[/{color}]",
+                title="[bold]Verdict[/bold]",
+                border_style=color,
+                expand=False,
+            )
+        )
+
+
+# ---------------------------------------------------------------------------
 # compare command
 # ---------------------------------------------------------------------------
 
