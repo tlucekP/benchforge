@@ -120,22 +120,96 @@ pip install benchforge
 
 # Quick Start
 
-Analyze a project:
-
 ```bash
+# Analyze a project
 benchforge analyze .
-```
 
-Run performance benchmarks:
-
-```bash
+# Run performance benchmarks
 benchforge benchmark .
+
+# Generate an HTML report
+benchforge report .
+
+# Show file heatmap
+benchforge analyze . --heatmap
+
+# JSON output (for scripts / CI)
+benchforge analyze . --format json
 ```
 
-Generate a report:
+---
+
+# Commands
+
+| Command | Description |
+|---|---|
+| `benchforge analyze PATH` | Static analysis + scoring |
+| `benchforge benchmark PATH` | Runtime and memory benchmarking |
+| `benchforge report PATH` | Full pipeline + HTML report |
+| `benchforge compare PATH_A PATH_B` | Side-by-side comparison of two projects |
+| `benchforge challenge PATH...` | Ranked leaderboard for N implementations |
+| `benchforge roast PATH` | Fun but honest code insights |
+| `benchforge ci PATH` | CI quality gate (exits 1 when score < threshold) |
+| `benchforge pr-guard PATH` | PR regression check (exits 1 when score dropped too much) |
+
+### analyze
 
 ```bash
-benchforge report .
+benchforge analyze .                        # text output
+benchforge analyze . --format json          # JSON output
+benchforge analyze . --heatmap              # show file heatmap
+benchforge analyze . --heatmap --top 20     # top 20 hottest files
+benchforge analyze . --ai                   # add AI insight (requires MISTRAL_API_KEY)
+```
+
+### compare
+
+```bash
+benchforge compare human/ ai_generated/
+benchforge compare human/ ai/ --label-a "Human" --label-b "GPT-4"
+benchforge compare human/ ai/ --format json
+```
+
+### challenge
+
+```bash
+benchforge challenge impl_a/ impl_b/ impl_c/
+benchforge challenge impl_a/ impl_b/ --labels "Human,Claude"
+benchforge challenge impl_a/ impl_b/ --format json
+```
+
+### roast
+
+```bash
+benchforge roast .
+benchforge roast . --ai          # AI commentary (requires MISTRAL_API_KEY)
+benchforge roast . --seed 42     # reproducible output
+```
+
+### ci
+
+```bash
+benchforge ci .                         # threshold from .benchforge.toml (default 60)
+benchforge ci . --min-score 75          # custom threshold
+benchforge ci . --format json           # JSON output for GitHub Actions / GitLab CI
+```
+
+Configure in `.benchforge.toml`:
+
+```toml
+[ci]
+min_score = 70
+```
+
+### pr-guard
+
+```bash
+# On the base branch - save baseline
+benchforge pr-guard . --save-baseline
+
+# On the PR branch - check for regression
+benchforge pr-guard . --max-drop 5
+benchforge pr-guard . --max-drop 5 --format json
 ```
 
 ---
@@ -159,34 +233,71 @@ BenchForge Score: 77
 
 ---
 
+# Configuration
+
+Create `.benchforge.toml` in your project root to customize scoring:
+
+```toml
+[scoring.weights]
+performance     = 0.40
+maintainability = 0.35
+memory          = 0.25
+
+[scoring.penalties]
+nested_loop     = 10.0
+long_function   = 5.0
+
+[ci]
+min_score = 70
+```
+
+See `docs/scoring.md` for full reference.
+
+---
+
+# CI / CD Integration
+
+See `docs/ci_integration.md` for GitHub Actions and GitLab CI examples.
+
+Quick example:
+
+```yaml
+- name: BenchForge quality gate
+  run: benchforge ci . --min-score 70 --format json
+```
+
+---
+
 # Roadmap
 
-## v1 – MVP
+## v1 - MVP (done)
 
-* project scanner
-* static analysis
-* benchmark engine
-* CLI interface
-* HTML report
-* BenchForge score
+* project scanner, static analysis, benchmark engine
+* CLI (`analyze`, `benchmark`, `report`)
+* HTML report, BenchForge score
 
-## v1.1
+## v1.1 (done)
 
-* AI vs Human benchmark mode
-* performance heatmap
+* `compare` - side-by-side project comparison
+* file heatmap (`--heatmap`)
+* AI interpretation (Mistral AI, `--ai` flag)
 
-## v1.2
+## v1.2 (done)
 
-* Roast Mode (fun code insights)
+* `roast` - fun code insights
 
-## v1.3
+## v1.3 (done)
 
-* Challenge Mode (compare multiple implementations)
+* `challenge` - ranked leaderboard for N implementations
 
-## v1.4
+## v1.4 (done)
 
-* CI integration
-* PR performance guard
+* `ci` - quality gate with configurable threshold
+* `pr-guard` - PR regression check with baseline file
+
+## v1.5
+
+* `badge` - SVG badge for README
 
 ---
 

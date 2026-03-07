@@ -1,35 +1,43 @@
 Roadmap
 
-## v1 – MVP
+## v1 – MVP ✅
 
-- project scanner
+- project scanner (`benchforge/core/scanner.py`)
+- static analysis (`benchforge/core/analyzer.py`)
+- benchmark engine (`benchforge/core/benchmark.py`)
+- scoring (`benchforge/core/scoring.py`)
+- CLI interface (`benchforge analyze`, `benchforge benchmark`, `benchforge report`)
+- HTML report (`benchforge/report/html_report.py`)
+- BenchForge score (0–100, three sub-scores: performance, maintainability, memory)
+- `--format json` for `analyze`
+- progress spinner
+- scoring weights configuration (`.benchforge.toml`)
 
-- static analysis
+## v1.1 ✅
 
-- benchmark engine
+- `benchforge compare PATH_A PATH_B` — side-by-side comparison of two projects
+- `benchforge analyze . --heatmap` — file heatmap in CLI + HTML report
+- AI interpretation stub (`benchforge/ai/interpreter.py`, Mistral AI, `--ai` flag)
 
-- CLI interface
+## v1.2 ✅
 
-- HTML report
+- `benchforge roast .` — fun code insights (deterministic templates + optional AI commentary)
 
-- BenchForge score
+## v1.3 ✅
 
-## v1.1
+- `benchforge challenge PATH...` — ranked leaderboard for N implementations
 
-- AI vs Human benchmark mode
+## v1.4 ✅
 
-- performance heatmap
+- `benchforge ci .` — quality gate, exits with code 1 when score < threshold
+  - `--min-score` flag, configurable via `[ci] min_score` in `.benchforge.toml`
+  - `--format json` for GitHub Actions / GitLab CI
+  - docs: `docs/ci_integration.md`
+- `benchforge pr-guard .` — PR regression check
+  - `--save-baseline` saves `.benchforge_baseline.json`
+  - `--max-drop N` (default 5) — fails if score dropped more than N points
+  - `--format json` for CI output
 
-## v1.2
+## v1.5
 
-- Roast Mode (fun code insights)
-
-## v1.3
-
-- Challenge Mode (compare multiple implementations)
-
-## v1.4
-
-- CI integration
-
-- PR performance guard
+- Badge generator (`benchforge badge .`) — SVG badge for README
