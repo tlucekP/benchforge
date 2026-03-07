@@ -13,6 +13,7 @@ from jinja2 import Environment, PackageLoader, select_autoescape
 
 from benchforge.core.analyzer import AnalysisResult, Issue
 from benchforge.core.benchmark import BenchmarkResult
+from benchforge.core.heatmap import build_heatmap, FileHeatEntry
 from benchforge.core.scoring import ScoreResult
 
 
@@ -27,6 +28,7 @@ class ReportData:
     benchmark: BenchmarkResult | None = None
     all_issues: list[Issue] = field(default_factory=list)
     ai_insight: object | None = None         # AIInsight | None (optional import)
+    heatmap: list[FileHeatEntry] = field(default_factory=list)
 
 
 def _build_jinja_env() -> Environment:
@@ -76,6 +78,7 @@ def generate_html_report(
         file_analyses=report_data.analysis.files,
         issue_breakdown=report_data.analysis.issue_breakdown,
         ai_insight=report_data.ai_insight,
+        heatmap=report_data.heatmap,
     )
 
     resolved = output_path.resolve()
@@ -111,4 +114,5 @@ def build_report_data(
         score=score,
         benchmark=benchmark,
         all_issues=_collect_issues(analysis),
+        heatmap=build_heatmap(analysis),
     )

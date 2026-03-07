@@ -224,6 +224,44 @@ def cli() -> None:
 # analyze command
 # ---------------------------------------------------------------------------
 
+def _heat_color(level: str) -> str:
+    return {"critical": "red", "high": "yellow", "medium": "cyan", "low": "green"}.get(level, "white")
+
+
+def _print_heatmap(analysis: "AnalysisResult", top_n: int = 10) -> None:
+    """Print a file heatmap table ranked by heat score."""
+    from benchforge.core.heatmap import build_heatmap
+
+    entries = build_heatmap(analysis, top_n=top_n)
+    if not entries:
+        console.print("[dim]No files to display in heatmap.[/dim]")
+        return
+
+    table = Table(title=f"File Heatmap (top {min(top_n, len(entries))})", box=box.ROUNDED)
+    table.add_column("Heat", width=10, justify="center")
+    table.add_column("File")
+    table.add_column("Issues", justify="right", width=7)
+    table.add_column("Complexity", justify="right", width=10)
+    table.add_column("MI", justify="right", width=7)
+    table.add_column("Top Issues", style="dim")
+
+    for entry in entries:
+        color = _heat_color(entry.heat_level)
+        heat_cell = f"[{color}]{entry.heat_score:.0f}  {entry.heat_level.upper()}[/{color}]"
+        top_cats = sorted(entry.issue_breakdown.items(), key=lambda x: -x[1])[:2]
+        top_str = ", ".join(f"{cat}:{n}" for cat, n in top_cats) if top_cats else "—"
+        table.add_row(
+            heat_cell,
+            entry.rel_path,
+            str(entry.issue_count),
+            str(entry.avg_complexity),
+            str(round(entry.maintainability_index, 1)),
+            top_str,
+        )
+
+    console.print(table)
+
+
 def _print_ai_insight(insight: object) -> None:
     """Print AI insight panel to the terminal if available."""
     from benchforge.ai.interpreter import AIInsight
@@ -264,7 +302,15 @@ def _print_ai_insight(insight: object) -> None:
     show_default=True,
     help="Output format: text (default) or json.",
 )
-def analyze(path: str, use_ai: bool, output_format: str) -> None:
+@click.option(
+    "--heatmap", "show_heatmap", is_flag=True, default=False,
+    help="Show file heatmap ranked by issues and complexity.",
+)
+@click.option(
+    "--top", "heatmap_top", default=10, show_default=True,
+    help="Number of files to show in heatmap (used with --heatmap).",
+)
+def analyze(path: str, use_ai: bool, output_format: str, show_heatmap: bool, heatmap_top: int) -> None:
     """Analyze a project directory for code quality issues.
 
     PATH defaults to the current directory.
@@ -327,6 +373,9 @@ def analyze(path: str, use_ai: bool, output_format: str) -> None:
     _print_scan_summary(scan)
     _print_issues(analysis)
     _print_scores(score)
+
+    if show_heatmap:
+        _print_heatmap(analysis, top_n=heatmap_top)
 
     # Optional AI interpretation
     if use_ai:
