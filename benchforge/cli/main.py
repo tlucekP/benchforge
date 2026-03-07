@@ -1221,3 +1221,196 @@ def ci(path: str, min_score: int | None, output_format: str) -> None:
         )
 
     sys.exit(0 if result.passed else 1)
+
+
+# ---------------------------------------------------------------------------
+# pr-guard command
+# ---------------------------------------------------------------------------
+
+@cli.command("pr-guard")
+@click.argument("path", default=".", metavar="PATH")
+@click.option(
+    "--save-baseline", "save_baseline_flag", is_flag=True, default=False,
+    help="Analyse the project and save scores as the new baseline (.benchforge_baseline.json).",
+)
+@click.option(
+    "--max-drop", "max_drop", default=None, type=int,
+    help="Maximum allowed score drop from baseline (default: 5).",
+)
+@click.option(
+    "--format", "output_format",
+    type=click.Choice(["text", "json"], case_sensitive=False),
+    default="text",
+    show_default=True,
+    help="Output format: text (default) or json.",
+)
+def pr_guard(path: str, save_baseline_flag: bool, max_drop: int | None, output_format: str) -> None:
+    """PR performance guard — detect score regressions between branches.
+
+    Two-step workflow:
+
+    \b
+    1. On the base branch, save a baseline:
+           benchforge pr-guard . --save-baseline
+
+    \b
+    2. On the PR branch, check for regression:
+           benchforge pr-guard . --max-drop 5
+
+    Exits with code 1 when the score dropped more than --max-drop points
+    compared to the saved baseline. Use --format json for CI output.
+
+    Example GitHub Actions workflow:
+
+    \b
+        - name: Save baseline (runs on main)
+          if: github.ref == 'refs/heads/main'
+          run: benchforge pr-guard . --save-baseline
+
+        - name: PR regression check
+          if: github.event_name == 'pull_request'
+          run: benchforge pr-guard . --max-drop 5 --format json
+    """
+    from benchforge.core.pr_guard import (
+        run_pr_guard, save_baseline, DEFAULT_MAX_DROP,
+        BASELINE_FILENAME,
+    )
+
+    try:
+        project_path = _resolve_path(path)
+    except click.BadParameter as exc:
+        err_console.print(f"Error: {exc}")
+        sys.exit(1)
+
+    cfg = _load_project_config(project_path)
+
+    # --save-baseline mode
+    if save_baseline_flag:
+        if output_format == "text":
+            console.print(f"\n[bold]BenchForge PR Guard[/bold] — saving baseline for [cyan]{project_path}[/cyan]\n")
+
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            TimeElapsedColumn(),
+            console=console,
+            transient=True,
+            disable=(output_format == "json"),
+        ) as progress:
+            task = progress.add_task("Scanning project...", total=None)
+            try:
+                scan = scan_project(project_path)
+            except NotADirectoryError as exc:
+                if output_format == "json":
+                    click.echo(json.dumps({"error": str(exc)}, indent=2))
+                else:
+                    err_console.print(f"Error: {exc}")
+                sys.exit(1)
+
+            if scan.file_count == 0:
+                if output_format == "json":
+                    click.echo(json.dumps({"error": "No files found."}, indent=2))
+                else:
+                    console.print("[yellow]No files found — cannot save baseline.[/yellow]")
+                sys.exit(1)
+
+            progress.update(task, description=f"Analyzing {scan.file_count} files...")
+            analysis = analyze_project(scan)
+            progress.update(task, description="Computing scores...")
+            score = compute_score(analysis, config=cfg)
+
+        baseline_path = save_baseline(project_path, score)
+
+        if output_format == "json":
+            click.echo(json.dumps({
+                "action": "baseline_saved",
+                "baseline_file": str(baseline_path),
+                "score": _score_to_dict(score),
+            }, indent=2, ensure_ascii=False))
+        else:
+            _print_scores(score)
+            console.print(
+                Panel(
+                    f"[green]Baseline saved[/green] -> {baseline_path.name}\n"
+                    f"BenchForge Score: [bold]{score.benchforge_score}[/bold]/100",
+                    title="[bold]PR Guard -- Baseline[/bold]",
+                    border_style="green",
+                    expand=False,
+                )
+            )
+        sys.exit(0)
+
+    # --check mode (default)
+    effective_max_drop = max_drop if max_drop is not None else DEFAULT_MAX_DROP
+
+    if output_format == "text":
+        console.print(f"\n[bold]BenchForge PR Guard[/bold] — [cyan]{project_path}[/cyan]\n")
+
+    try:
+        result = run_pr_guard(project_path, cfg, max_drop=effective_max_drop)
+    except FileNotFoundError as exc:
+        if output_format == "json":
+            click.echo(json.dumps({"error": str(exc)}, indent=2))
+        else:
+            err_console.print(f"Error: {exc}")
+        sys.exit(1)
+    except (NotADirectoryError, ValueError) as exc:
+        if output_format == "json":
+            click.echo(json.dumps({"error": str(exc)}, indent=2))
+        else:
+            err_console.print(f"Error: {exc}")
+        sys.exit(1)
+
+    if output_format == "json":
+        payload = {
+            "passed": result.passed,
+            "actual_score": result.actual_score,
+            "baseline_score": result.baseline_score,
+            "score_delta": result.score_delta,
+            "regression": result.regression,
+            "max_drop": result.max_drop,
+            "baseline_saved_at": result.baseline.saved_at,
+            "path": str(result.path),
+            "score": _score_to_dict(result.score),
+            "scan": _scan_to_dict(result.scan),
+            "analysis": _analysis_to_dict(result.analysis),
+        }
+        click.echo(json.dumps(payload, indent=2, ensure_ascii=False))
+        sys.exit(0 if result.passed else 1)
+
+    # text mode
+    _print_scores(result.score)
+
+    delta = result.score_delta
+    delta_sign = "+" if delta >= 0 else ""
+    delta_color = "green" if delta >= 0 else "red"
+    console.print(
+        f"\nBaseline: [bold]{result.baseline_score}[/bold]  "
+        f"Current: [bold]{result.actual_score}[/bold]  "
+        f"Delta: [{delta_color}]{delta_sign}{delta}[/{delta_color}]  "
+        f"Max drop: {result.max_drop}"
+    )
+
+    if result.passed:
+        msg = (
+            f"[green]PASSED[/green] — score {result.actual_score} "
+            f"(baseline {result.baseline_score}, delta {delta_sign}{delta})"
+        )
+        border = "green"
+    else:
+        msg = (
+            f"[red]FAILED[/red] — score dropped by {result.regression} points "
+            f"({result.baseline_score} -> {result.actual_score}, max allowed: {result.max_drop})"
+        )
+        border = "red"
+
+    console.print(
+        Panel(
+            msg,
+            title="[bold]PR Performance Guard[/bold]",
+            border_style=border,
+            expand=False,
+        )
+    )
+
+    sys.exit(0 if result.passed else 1)
