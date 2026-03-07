@@ -21,6 +21,7 @@ from pathlib import Path
 import click
 from rich.console import Console
 from rich.panel import Panel
+from rich.progress import Progress, SpinnerColumn, TextColumn, TimeElapsedColumn
 from rich.table import Table
 from rich import box
 
@@ -262,29 +263,47 @@ def analyze(path: str, use_ai: bool, output_format: str) -> None:
     if output_format == "text":
         console.print(f"\n[bold]BenchForge[/bold] — analyzing [cyan]{project_path}[/cyan]\n")
 
-    # Scanner
-    try:
-        scan = scan_project(project_path)
-    except NotADirectoryError as exc:
-        err_console.print(f"Error: {exc}")
-        sys.exit(1)
-
-    if scan.file_count == 0:
-        if output_format == "json":
-            click.echo(json.dumps({"error": "No files found in the given directory."}, indent=2))
-        else:
-            console.print("[yellow]No files found in the given directory.[/yellow]")
-        sys.exit(0)
-
-    # Analyzer + Scoring (always run regardless of format)
-    analysis = analyze_project(scan)
-    score = compute_score(analysis)
-
     if output_format == "json":
+        # JSON mode: run pipeline silently, no progress output
+        try:
+            scan = scan_project(project_path)
+        except NotADirectoryError as exc:
+            err_console.print(f"Error: {exc}")
+            sys.exit(1)
+        if scan.file_count == 0:
+            click.echo(json.dumps({"error": "No files found in the given directory."}, indent=2))
+            sys.exit(0)
+        analysis = analyze_project(scan)
+        score = compute_score(analysis)
         _print_json_output(scan, analysis, score)
         return
 
-    # --- text output ---
+    # --- text mode: show progress spinner ---
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[progress.description]{task.description}"),
+        TimeElapsedColumn(),
+        console=console,
+        transient=True,
+    ) as progress:
+        task = progress.add_task("Scanning project...", total=None)
+
+        try:
+            scan = scan_project(project_path)
+        except NotADirectoryError as exc:
+            err_console.print(f"Error: {exc}")
+            sys.exit(1)
+
+        if scan.file_count == 0:
+            console.print("[yellow]No files found in the given directory.[/yellow]")
+            sys.exit(0)
+
+        progress.update(task, description=f"Analyzing {scan.file_count} files...")
+        analysis = analyze_project(scan)
+
+        progress.update(task, description="Computing scores...")
+        score = compute_score(analysis)
+
     _print_scan_summary(scan)
     _print_issues(analysis)
     _print_scores(score)
@@ -432,45 +451,57 @@ def report(path: str, output: str, use_ai: bool) -> None:
 
     console.print(f"\n[bold]BenchForge[/bold] — generating report for [cyan]{project_path}[/cyan]\n")
 
-    # Pipeline
-    try:
-        scan = scan_project(project_path)
-    except NotADirectoryError as exc:
-        err_console.print(f"Error: {exc}")
-        sys.exit(1)
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[progress.description]{task.description}"),
+        TimeElapsedColumn(),
+        console=console,
+        transient=True,
+    ) as progress:
+        task = progress.add_task("Scanning project...", total=None)
 
-    if scan.file_count == 0:
-        console.print("[yellow]No files found — report would be empty.[/yellow]")
-        sys.exit(0)
+        try:
+            scan = scan_project(project_path)
+        except NotADirectoryError as exc:
+            err_console.print(f"Error: {exc}")
+            sys.exit(1)
 
-    analysis = analyze_project(scan)
-    score = compute_score(analysis)
+        if scan.file_count == 0:
+            console.print("[yellow]No files found — report would be empty.[/yellow]")
+            sys.exit(0)
 
-    scan_summary = {
-        "file_count": scan.file_count,
-        "primary_language": scan.primary_language,
-        "total_size_kb": scan.total_size_kb,
-        "modules": scan.modules,
-        "languages": scan.languages,
-    }
+        progress.update(task, description=f"Analyzing {scan.file_count} files...")
+        analysis = analyze_project(scan)
 
-    report_data = build_report_data(
-        project_path=project_path,
-        scan_summary=scan_summary,
-        analysis=analysis,
-        score=score,
-    )
+        progress.update(task, description="Computing scores...")
+        score = compute_score(analysis)
 
-    # Optional AI interpretation
-    if use_ai:
-        from benchforge.ai.interpreter import interpret, _is_available
-        if not _is_available():
-            console.print("[yellow]AI: MISTRAL_API_KEY not set — report will not include AI insight.[/yellow]")
-        else:
-            console.print("[dim]Requesting AI insight...[/dim]")
-            insight = interpret(report_data)
-            if insight:
-                report_data.ai_insight = insight
+        progress.update(task, description="Building report data...")
+        scan_summary = {
+            "file_count": scan.file_count,
+            "primary_language": scan.primary_language,
+            "total_size_kb": scan.total_size_kb,
+            "modules": scan.modules,
+            "languages": scan.languages,
+        }
+        report_data = build_report_data(
+            project_path=project_path,
+            scan_summary=scan_summary,
+            analysis=analysis,
+            score=score,
+        )
+
+        # Optional AI interpretation
+        if use_ai:
+            from benchforge.ai.interpreter import interpret, _is_available
+            if not _is_available():
+                progress.stop()
+                console.print("[yellow]AI: MISTRAL_API_KEY not set — report will not include AI insight.[/yellow]")
+            else:
+                progress.update(task, description="Requesting AI insight...")
+                insight = interpret(report_data)
+                if insight:
+                    report_data.ai_insight = insight
 
     output_path = Path(output).resolve()
 
