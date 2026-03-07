@@ -25,6 +25,9 @@ Example .benchforge.toml:
     runtime_slow_ms = 1000.0
     memory_small_mb = 5.0
     memory_large_mb = 200.0
+
+    [ci]
+    min_score = 60
 """
 
 from __future__ import annotations
@@ -133,16 +136,29 @@ class ScoringThresholds:
 
 
 @dataclass
+class CiConfig:
+    min_score: int = 60
+
+    def validate(self) -> None:
+        if not (0 <= self.min_score <= 100):
+            raise ValueError(
+                f"[ci.min_score] must be between 0 and 100, got {self.min_score}."
+            )
+
+
+@dataclass
 class BenchForgeConfig:
     weights: ScoringWeights = field(default_factory=ScoringWeights)
     penalties: ScoringPenalties = field(default_factory=ScoringPenalties)
     thresholds: ScoringThresholds = field(default_factory=ScoringThresholds)
+    ci: CiConfig = field(default_factory=CiConfig)
     config_path: Path | None = None  # None = using built-in defaults
 
     def validate(self) -> None:
         self.weights.validate()
         self.penalties.validate()
         self.thresholds.validate()
+        self.ci.validate()
 
 
 # ---------------------------------------------------------------------------
@@ -175,6 +191,7 @@ def load_config(project_root: Path) -> BenchForgeConfig:
     weights_raw = scoring_raw.get("weights", {})
     penalties_raw = scoring_raw.get("penalties", {})
     thresholds_raw = scoring_raw.get("thresholds", {})
+    ci_raw = raw.get("ci", {})
 
     weights = ScoringWeights(
         performance=float(weights_raw.get("performance", ScoringWeights.performance)),
@@ -199,10 +216,15 @@ def load_config(project_root: Path) -> BenchForgeConfig:
         memory_large_mb=float(thresholds_raw.get("memory_large_mb", ScoringThresholds.memory_large_mb)),
     )
 
+    ci = CiConfig(
+        min_score=int(ci_raw.get("min_score", CiConfig.min_score)),
+    )
+
     cfg = BenchForgeConfig(
         weights=weights,
         penalties=penalties,
         thresholds=thresholds,
+        ci=ci,
         config_path=config_file,
     )
     cfg.validate()

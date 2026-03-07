@@ -1124,3 +1124,100 @@ def _print_compare_table(result: object) -> None:
                 expand=False,
             )
         )
+
+
+# ---------------------------------------------------------------------------
+# ci command
+# ---------------------------------------------------------------------------
+
+@cli.command()
+@click.argument("path", default=".", metavar="PATH")
+@click.option(
+    "--min-score", "min_score", default=None, type=int,
+    help="Minimum BenchForge score required (default: 60 or value from .benchforge.toml).",
+)
+@click.option(
+    "--format", "output_format",
+    type=click.Choice(["text", "json"], case_sensitive=False),
+    default="text",
+    show_default=True,
+    help="Output format: text (default) or json.",
+)
+def ci(path: str, min_score: int | None, output_format: str) -> None:
+    """Run quality gate check for CI/CD pipelines.
+
+    Exits with code 1 when the BenchForge score is below --min-score
+    (default 60). Use --format json for machine-readable output
+    (GitHub Actions, GitLab CI, etc.).
+
+    Example GitHub Actions step:
+
+        - name: BenchForge quality gate
+          run: benchforge ci . --min-score 70 --format json
+    """
+    from benchforge.core.ci_guard import run_ci_check
+
+    try:
+        project_path = _resolve_path(path)
+    except click.BadParameter as exc:
+        err_console.print(f"Error: {exc}")
+        sys.exit(1)
+
+    cfg = _load_project_config(project_path)
+
+    try:
+        result = run_ci_check(project_path, cfg, min_score_override=min_score)
+    except (NotADirectoryError, ValueError) as exc:
+        if output_format == "json":
+            click.echo(json.dumps({"error": str(exc)}, indent=2))
+        else:
+            err_console.print(f"Error: {exc}")
+        sys.exit(1)
+
+    if output_format == "json":
+        payload = {
+            "passed": result.passed,
+            "actual_score": result.actual_score,
+            "min_score": result.min_score,
+            "score_gap": result.score_gap,
+            "path": str(result.path),
+            "scan": _scan_to_dict(result.scan),
+            "analysis": _analysis_to_dict(result.analysis),
+            "score": _score_to_dict(result.score),
+        }
+        click.echo(json.dumps(payload, indent=2, ensure_ascii=False))
+        sys.exit(0 if result.passed else 1)
+
+    # --- text mode ---
+    console.print(f"\n[bold]BenchForge CI[/bold] — [cyan]{project_path}[/cyan]\n")
+
+    _print_scores(result.score)
+
+    threshold_color = "green" if result.passed else "red"
+    console.print(
+        f"\nThreshold: [{threshold_color}]{result.min_score}[/{threshold_color}]  "
+        f"Actual: [{threshold_color}]{result.actual_score}[/{threshold_color}]"
+    )
+
+    if result.passed:
+        console.print(
+            Panel(
+                f"[green]PASSED[/green] — score {result.actual_score} >= {result.min_score}",
+                title="[bold]CI Quality Gate[/bold]",
+                border_style="green",
+                expand=False,
+            )
+        )
+    else:
+        gap = result.score_gap
+        console.print(
+            Panel(
+                f"[red]FAILED[/red] — score {result.actual_score} < {result.min_score} "
+                f"(need +{gap} points)",
+                title="[bold]CI Quality Gate[/bold]",
+                border_style="red",
+                expand=False,
+            )
+        )
+
+    sys.exit(0 if result.passed else 1)
