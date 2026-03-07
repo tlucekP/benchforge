@@ -1,9 +1,9 @@
-"""BenchForge CLI — entry point for all user-facing commands.
+﻿"""BenchForge CLI â€” entry point for all user-facing commands.
 
 Commands:
-  benchforge analyze <path>   — static analysis + scoring
-  benchforge benchmark <path> — runtime benchmarking
-  benchforge report <path>    — full pipeline + HTML report
+  benchforge analyze <path>   â€” static analysis + scoring
+  benchforge benchmark <path> â€” runtime benchmarking
+  benchforge report <path>    â€” full pipeline + HTML report
 
 Business logic lives in core modules. This file handles only:
   - argument parsing and validation
@@ -105,7 +105,7 @@ def _load_project_config(project_path: Path) -> BenchForgeConfig:
     try:
         return load_config(project_path)
     except ValueError as exc:
-        err_console.print(f"[yellow]Config warning:[/yellow] {exc} — using defaults.")
+        err_console.print(f"[yellow]Config warning:[/yellow] {exc} â€” using defaults.")
         from benchforge.core.config import BenchForgeConfig as _Cfg
         return _Cfg()
 
@@ -203,7 +203,7 @@ def _print_issues(analysis: AnalysisResult) -> None:
             f"[{color}]{issue.severity}[/{color}]",
             issue.category,
             issue.file,
-            str(issue.line) if issue.line else "—",
+            str(issue.line) if issue.line else "â€”",
             issue.description,
         )
 
@@ -217,7 +217,7 @@ def _print_issues(analysis: AnalysisResult) -> None:
 @click.group()
 @click.version_option(package_name="benchforge")
 def cli() -> None:
-    """BenchForge — code quality analysis for the AI coding era."""
+    """BenchForge â€” code quality analysis for the AI coding era."""
 
 
 # ---------------------------------------------------------------------------
@@ -249,7 +249,7 @@ def _print_heatmap(analysis: "AnalysisResult", top_n: int = 10) -> None:
         color = _heat_color(entry.heat_level)
         heat_cell = f"[{color}]{entry.heat_score:.0f}  {entry.heat_level.upper()}[/{color}]"
         top_cats = sorted(entry.issue_breakdown.items(), key=lambda x: -x[1])[:2]
-        top_str = ", ".join(f"{cat}:{n}" for cat, n in top_cats) if top_cats else "—"
+        top_str = ", ".join(f"{cat}:{n}" for cat, n in top_cats) if top_cats else "â€”"
         table.add_row(
             heat_cell,
             entry.rel_path,
@@ -322,14 +322,14 @@ def analyze(path: str, use_ai: bool, output_format: str, show_heatmap: bool, hea
         sys.exit(1)
 
     if output_format == "text":
-        console.print(f"\n[bold]BenchForge[/bold] — analyzing [cyan]{project_path}[/cyan]\n")
+        console.print(f"\n[bold]BenchForge[/bold] â€” analyzing [cyan]{project_path}[/cyan]\n")
 
     cfg = _load_project_config(project_path)
 
     if output_format == "json":
         # JSON mode: run pipeline silently, no progress output
         try:
-            scan = scan_project(project_path)
+            scan = scan_project(project_path, config=cfg)
         except NotADirectoryError as exc:
             err_console.print(f"Error: {exc}")
             sys.exit(1)
@@ -352,7 +352,7 @@ def analyze(path: str, use_ai: bool, output_format: str, show_heatmap: bool, hea
         task = progress.add_task("Scanning project...", total=None)
 
         try:
-            scan = scan_project(project_path)
+            scan = scan_project(project_path, config=cfg)
         except NotADirectoryError as exc:
             err_console.print(f"Error: {exc}")
             sys.exit(1)
@@ -382,7 +382,7 @@ def analyze(path: str, use_ai: bool, output_format: str, show_heatmap: bool, hea
         from benchforge.ai.interpreter import interpret, _is_available
         from benchforge.report.html_report import build_report_data
         if not _is_available():
-            console.print("[yellow]AI: MISTRAL_API_KEY not set — skipping AI insight.[/yellow]")
+            console.print("[yellow]AI: MISTRAL_API_KEY not set â€” skipping AI insight.[/yellow]")
         else:
             console.print("[dim]Requesting AI insight...[/dim]")
             scan_summary = {
@@ -430,7 +430,9 @@ def benchmark(path: str, runs: int, target_file: str | None) -> None:
         err_console.print(f"Error: {exc}")
         sys.exit(1)
 
-    console.print(f"\n[bold]BenchForge[/bold] — benchmarking [cyan]{project_path}[/cyan]\n")
+    console.print(f"\n[bold]BenchForge[/bold] â€” benchmarking [cyan]{project_path}[/cyan]\n")
+
+    cfg = _load_project_config(project_path)
 
     if target_file:
         target = Path(target_file).resolve()
@@ -440,7 +442,7 @@ def benchmark(path: str, runs: int, target_file: str | None) -> None:
         py_files = [target]
     else:
         try:
-            scan = scan_project(project_path)
+            scan = scan_project(project_path, config=cfg)
         except NotADirectoryError as exc:
             err_console.print(f"Error: {exc}")
             sys.exit(1)
@@ -474,7 +476,7 @@ def benchmark(path: str, runs: int, target_file: str | None) -> None:
     table.add_column("Mean (ms)", justify="right")
     table.add_column("Min (ms)", justify="right")
     table.add_column("Max (ms)", justify="right")
-    table.add_column("Mem ΔMB", justify="right")
+    table.add_column("Mem Î”MB", justify="right")
     table.add_column("Runs", justify="right")
 
     for fn in all_results:
@@ -518,7 +520,7 @@ def report(path: str, output: str, use_ai: bool) -> None:
         err_console.print(f"Error: {exc}")
         sys.exit(1)
 
-    console.print(f"\n[bold]BenchForge[/bold] — generating report for [cyan]{project_path}[/cyan]\n")
+    console.print(f"\n[bold]BenchForge[/bold] â€” generating report for [cyan]{project_path}[/cyan]\n")
 
     cfg = _load_project_config(project_path)
 
@@ -532,13 +534,13 @@ def report(path: str, output: str, use_ai: bool) -> None:
         task = progress.add_task("Scanning project...", total=None)
 
         try:
-            scan = scan_project(project_path)
+            scan = scan_project(project_path, config=cfg)
         except NotADirectoryError as exc:
             err_console.print(f"Error: {exc}")
             sys.exit(1)
 
         if scan.file_count == 0:
-            console.print("[yellow]No files found — report would be empty.[/yellow]")
+            console.print("[yellow]No files found â€” report would be empty.[/yellow]")
             sys.exit(0)
 
         progress.update(task, description=f"Analyzing {scan.file_count} files...")
@@ -567,7 +569,7 @@ def report(path: str, output: str, use_ai: bool) -> None:
             from benchforge.ai.interpreter import interpret, _is_available
             if not _is_available():
                 progress.stop()
-                console.print("[yellow]AI: MISTRAL_API_KEY not set — report will not include AI insight.[/yellow]")
+                console.print("[yellow]AI: MISTRAL_API_KEY not set â€” report will not include AI insight.[/yellow]")
             else:
                 progress.update(task, description="Requesting AI insight...")
                 insight = interpret(report_data)
@@ -599,7 +601,7 @@ def report(path: str, output: str, use_ai: bool) -> None:
 @click.option("--seed", default=None, type=int,
               help="Random seed for reproducible roast output.")
 def roast(path: str, use_ai: bool, seed: int | None) -> None:
-    """Roast your code — fun but honest quality insights.
+    """Roast your code â€” fun but honest quality insights.
 
     PATH defaults to the current directory.
     """
@@ -611,7 +613,7 @@ def roast(path: str, use_ai: bool, seed: int | None) -> None:
         err_console.print(f"Error: {exc}")
         sys.exit(1)
 
-    console.print(f"\n[bold]BenchForge Roast[/bold] — [cyan]{project_path}[/cyan]\n")
+    console.print(f"\n[bold]BenchForge Roast[/bold] â€” [cyan]{project_path}[/cyan]\n")
 
     with Progress(
         SpinnerColumn(),
@@ -623,13 +625,13 @@ def roast(path: str, use_ai: bool, seed: int | None) -> None:
         task = progress.add_task("Scanning project...", total=None)
 
         try:
-            scan = scan_project(project_path)
+            scan = scan_project(project_path, config=cfg)
         except NotADirectoryError as exc:
             err_console.print(f"Error: {exc}")
             sys.exit(1)
 
         if scan.file_count == 0:
-            console.print("[yellow]No files found — nothing to roast.[/yellow]")
+            console.print("[yellow]No files found â€” nothing to roast.[/yellow]")
             sys.exit(0)
 
         progress.update(task, description=f"Analyzing {scan.file_count} files...")
@@ -649,7 +651,7 @@ def roast(path: str, use_ai: bool, seed: int | None) -> None:
         from benchforge.ai.interpreter import interpret, _is_available
         from benchforge.report.html_report import build_report_data
         if not _is_available():
-            console.print("[yellow]AI: MISTRAL_API_KEY not set — skipping AI roast.[/yellow]")
+            console.print("[yellow]AI: MISTRAL_API_KEY not set â€” skipping AI roast.[/yellow]")
         else:
             console.print("\n[dim]Requesting AI commentary...[/dim]")
             scan_summary = {
@@ -676,13 +678,13 @@ def _print_roast(result: "RoastResult") -> None:
     assert isinstance(result, RoastResult)
 
     category_icons = {
-        "nested_loop":     "🔁",
-        "long_function":   "📜",
-        "unused_import":   "👻",
-        "high_complexity": "🌀",
-        "duplicate_code":  "📋",
-        "score":           "🎯",
-        "clean":           "✨",
+        "nested_loop":     "đź”",
+        "long_function":   "đź“ś",
+        "unused_import":   "đź‘»",
+        "high_complexity": "đźŚ€",
+        "duplicate_code":  "đź“‹",
+        "score":           "đźŽŻ",
+        "clean":           "âś¨",
     }
 
     lines_to_print = [line for line in result.lines if line.category != "score"]
@@ -703,7 +705,7 @@ def _print_roast(result: "RoastResult") -> None:
     # Issue roasts
     roast_text_lines = []
     for line in lines_to_print:
-        icon = category_icons.get(line.category, "•")
+        icon = category_icons.get(line.category, "â€˘")
         roast_text_lines.append(f"{icon}  {line.message}")
 
     if result.hottest_file:
@@ -783,7 +785,7 @@ def challenge(paths: tuple[str, ...], labels: str | None, output_format: str) ->
             label_list[i] if label_list and i < len(label_list) else resolved[i].name
             for i in range(len(resolved))
         )
-        console.print(f"\n[bold]BenchForge Challenge[/bold] — {label_str}\n")
+        console.print(f"\n[bold]BenchForge Challenge[/bold] â€” {label_str}\n")
 
     cfg = _load_project_config(resolved[0])
 
@@ -951,7 +953,7 @@ def compare(
 
     if output_format == "text":
         console.print(
-            f"\n[bold]BenchForge Compare[/bold] — "
+            f"\n[bold]BenchForge Compare[/bold] â€” "
             f"[cyan]{label_a or proj_a.name}[/cyan] vs "
             f"[cyan]{label_b or proj_b.name}[/cyan]\n"
         )
@@ -1011,7 +1013,7 @@ def _winner_marker(category: str, category_winners: dict[str, str], side: str) -
     """Return a checkmark if this side won the category, else empty string."""
     winner = category_winners.get(category, "tie")
     if winner == side:
-        return " [green]✓[/green]"
+        return " [green]âś“[/green]"
     if winner == "tie":
         return " [dim]=[/dim]"
     return ""
@@ -1189,7 +1191,7 @@ def ci(path: str, min_score: int | None, output_format: str) -> None:
         sys.exit(0 if result.passed else 1)
 
     # --- text mode ---
-    console.print(f"\n[bold]BenchForge CI[/bold] — [cyan]{project_path}[/cyan]\n")
+    console.print(f"\n[bold]BenchForge CI[/bold] â€” [cyan]{project_path}[/cyan]\n")
 
     _print_scores(result.score)
 
@@ -1202,7 +1204,7 @@ def ci(path: str, min_score: int | None, output_format: str) -> None:
     if result.passed:
         console.print(
             Panel(
-                f"[green]PASSED[/green] — score {result.actual_score} >= {result.min_score}",
+                f"[green]PASSED[/green] â€” score {result.actual_score} >= {result.min_score}",
                 title="[bold]CI Quality Gate[/bold]",
                 border_style="green",
                 expand=False,
@@ -1212,7 +1214,7 @@ def ci(path: str, min_score: int | None, output_format: str) -> None:
         gap = result.score_gap
         console.print(
             Panel(
-                f"[red]FAILED[/red] — score {result.actual_score} < {result.min_score} "
+                f"[red]FAILED[/red] â€” score {result.actual_score} < {result.min_score} "
                 f"(need +{gap} points)",
                 title="[bold]CI Quality Gate[/bold]",
                 border_style="red",
@@ -1245,7 +1247,7 @@ def ci(path: str, min_score: int | None, output_format: str) -> None:
     help="Output format: text (default) or json.",
 )
 def pr_guard(path: str, save_baseline_flag: bool, max_drop: int | None, output_format: str) -> None:
-    """PR performance guard — detect score regressions between branches.
+    """PR performance guard â€” detect score regressions between branches.
 
     Two-step workflow:
 
@@ -1287,7 +1289,7 @@ def pr_guard(path: str, save_baseline_flag: bool, max_drop: int | None, output_f
     # --save-baseline mode
     if save_baseline_flag:
         if output_format == "text":
-            console.print(f"\n[bold]BenchForge PR Guard[/bold] — saving baseline for [cyan]{project_path}[/cyan]\n")
+            console.print(f"\n[bold]BenchForge PR Guard[/bold] â€” saving baseline for [cyan]{project_path}[/cyan]\n")
 
         with Progress(
             SpinnerColumn(),
@@ -1299,7 +1301,7 @@ def pr_guard(path: str, save_baseline_flag: bool, max_drop: int | None, output_f
         ) as progress:
             task = progress.add_task("Scanning project...", total=None)
             try:
-                scan = scan_project(project_path)
+                scan = scan_project(project_path, config=cfg)
             except NotADirectoryError as exc:
                 if output_format == "json":
                     click.echo(json.dumps({"error": str(exc)}, indent=2))
@@ -1311,7 +1313,7 @@ def pr_guard(path: str, save_baseline_flag: bool, max_drop: int | None, output_f
                 if output_format == "json":
                     click.echo(json.dumps({"error": "No files found."}, indent=2))
                 else:
-                    console.print("[yellow]No files found — cannot save baseline.[/yellow]")
+                    console.print("[yellow]No files found â€” cannot save baseline.[/yellow]")
                 sys.exit(1)
 
             progress.update(task, description=f"Analyzing {scan.file_count} files...")
@@ -1344,7 +1346,7 @@ def pr_guard(path: str, save_baseline_flag: bool, max_drop: int | None, output_f
     effective_max_drop = max_drop if max_drop is not None else DEFAULT_MAX_DROP
 
     if output_format == "text":
-        console.print(f"\n[bold]BenchForge PR Guard[/bold] — [cyan]{project_path}[/cyan]\n")
+        console.print(f"\n[bold]BenchForge PR Guard[/bold] â€” [cyan]{project_path}[/cyan]\n")
 
     try:
         result = run_pr_guard(project_path, cfg, max_drop=effective_max_drop)
@@ -1393,13 +1395,13 @@ def pr_guard(path: str, save_baseline_flag: bool, max_drop: int | None, output_f
 
     if result.passed:
         msg = (
-            f"[green]PASSED[/green] — score {result.actual_score} "
+            f"[green]PASSED[/green] â€” score {result.actual_score} "
             f"(baseline {result.baseline_score}, delta {delta_sign}{delta})"
         )
         border = "green"
     else:
         msg = (
-            f"[red]FAILED[/red] — score dropped by {result.regression} points "
+            f"[red]FAILED[/red] â€” score dropped by {result.regression} points "
             f"({result.baseline_score} -> {result.actual_score}, max allowed: {result.max_drop})"
         )
         border = "red"
@@ -1459,7 +1461,7 @@ def badge(path: str, output_path: str | None, badge_style: str, badge_label: str
 
     if output_format == "json":
         try:
-            scan = scan_project(project_path)
+            scan = scan_project(project_path, config=cfg)
         except NotADirectoryError as exc:
             click.echo(json.dumps({"error": str(exc)}, indent=2))
             sys.exit(1)
@@ -1490,7 +1492,7 @@ def badge(path: str, output_path: str | None, badge_style: str, badge_label: str
         task = progress.add_task("Scanning project...", total=None)
 
         try:
-            scan = scan_project(project_path)
+            scan = scan_project(project_path, config=cfg)
         except NotADirectoryError as exc:
             err_console.print(f"Error: {exc}")
             sys.exit(1)
@@ -1516,3 +1518,7 @@ def badge(path: str, output_path: str | None, badge_style: str, badge_label: str
         return
 
     click.echo(badge_result.svg)
+
+
+
+

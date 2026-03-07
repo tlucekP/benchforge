@@ -1,4 +1,4 @@
-"""Tests for benchforge.core.config — .benchforge.toml loader."""
+﻿"""Tests for benchforge.core.config - .benchforge.toml loader."""
 
 from __future__ import annotations
 
@@ -8,6 +8,7 @@ import pytest
 
 from benchforge.core.config import (
     BenchForgeConfig,
+    ScopeConfig,
     ScoringWeights,
     ScoringPenalties,
     ScoringThresholds,
@@ -84,7 +85,6 @@ class TestLoadFromFile:
         cfg = load_config(tmp_path)
         assert cfg.penalties.nested_loop == pytest.approx(12.0)
         assert cfg.penalties.long_function == pytest.approx(3.0)
-        # Unspecified keys fall back to defaults
         assert cfg.penalties.unused_import == pytest.approx(2.0)
 
     def test_custom_thresholds_loaded(self, tmp_path: Path) -> None:
@@ -96,7 +96,6 @@ class TestLoadFromFile:
     def test_partial_section_uses_defaults_for_rest(self, tmp_path: Path) -> None:
         _write_toml(tmp_path, "[scoring.weights]\nperformance = 0.35\nmaintainability = 0.40\nmemory = 0.25\n")
         cfg = load_config(tmp_path)
-        # Thresholds not specified — must still be defaults
         assert cfg.thresholds.runtime_fast_ms == pytest.approx(10.0)
 
     def test_empty_file_returns_defaults(self, tmp_path: Path) -> None:
@@ -143,9 +142,29 @@ class TestValidation:
 class TestScoringWeightsValidation:
     def test_valid_weights_do_not_raise(self) -> None:
         w = ScoringWeights(performance=0.4, maintainability=0.4, memory=0.2)
-        w.validate()  # must not raise
+        w.validate()
 
     def test_invalid_sum_raises(self) -> None:
         w = ScoringWeights(performance=0.5, maintainability=0.5, memory=0.5)
         with pytest.raises(ValueError):
             w.validate()
+
+
+class TestScopeConfig:
+    def test_default_scope_excludes_tests(self, tmp_path: Path) -> None:
+        cfg = load_config(tmp_path)
+        assert "tests/**" in cfg.scope.exclude
+
+    def test_custom_scope_loaded(self, tmp_path: Path) -> None:
+        _write_toml(tmp_path, '[scope]\ninclude = ["src/**"]\nexclude = ["legacy/**"]\n')
+        cfg = load_config(tmp_path)
+        assert cfg.scope.include == ["src/**"]
+        assert cfg.scope.exclude == ["legacy/**"]
+
+    def test_invalid_empty_scope_pattern_raises(self, tmp_path: Path) -> None:
+        _write_toml(tmp_path, '[scope]\nexclude = [""]\n')
+        with pytest.raises(ValueError, match="scope.exclude"):
+            load_config(tmp_path)
+
+    def test_scope_validate_accepts_non_empty_patterns(self) -> None:
+        ScopeConfig(include=["src/**"], exclude=["tests/**"]).validate()

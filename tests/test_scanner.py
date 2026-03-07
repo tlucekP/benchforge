@@ -1,4 +1,4 @@
-"""Tests for benchforge.core.scanner."""
+﻿"""Tests for benchforge.core.scanner."""
 
 from __future__ import annotations
 
@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 
+from benchforge.core.config import BenchForgeConfig, ScopeConfig
 from benchforge.core.scanner import scan_project, ScanResult
 
 
@@ -75,7 +76,6 @@ class TestScanProject:
         (pycache / "module.pyc").write_text("", encoding="utf-8")
         (tmp_path / "real.py").write_text("x = 1\n", encoding="utf-8")
         result = scan_project(tmp_path)
-        # .pyc has no recognised language, but .py does
         py_files = [f for f in result.files if f.suffix == ".py"]
         assert len(py_files) == 1
 
@@ -89,3 +89,29 @@ class TestScanProject:
     def test_root_is_resolved(self, single_file_project: Path) -> None:
         result = scan_project(single_file_project)
         assert result.root.is_absolute()
+
+    def test_default_scope_excludes_tests_directory(self, tmp_path: Path) -> None:
+        tests_dir = tmp_path / "tests"
+        tests_dir.mkdir()
+        (tests_dir / "test_sample.py").write_text("x = 1\n", encoding="utf-8")
+        (tmp_path / "app.py").write_text("y = 2\n", encoding="utf-8")
+        result = scan_project(tmp_path)
+        assert all("tests" not in str(p.relative_to(tmp_path)) for p in result.files)
+        assert result.file_count == 1
+
+    def test_custom_scope_can_include_tests_directory(self, tmp_path: Path) -> None:
+        tests_dir = tmp_path / "tests"
+        tests_dir.mkdir()
+        (tests_dir / "test_sample.py").write_text("x = 1\n", encoding="utf-8")
+        (tmp_path / "app.py").write_text("y = 2\n", encoding="utf-8")
+        cfg = BenchForgeConfig(scope=ScopeConfig(exclude=[]))
+        result = scan_project(tmp_path, config=cfg)
+        assert result.file_count == 2
+
+    def test_scope_excludes_egg_info(self, tmp_path: Path) -> None:
+        egg = tmp_path / "package.egg-info"
+        egg.mkdir()
+        (egg / "PKG-INFO").write_text("metadata\n", encoding="utf-8")
+        (tmp_path / "app.py").write_text("x = 1\n", encoding="utf-8")
+        result = scan_project(tmp_path)
+        assert result.file_count == 1

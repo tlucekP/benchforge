@@ -172,7 +172,7 @@ def run_pr_guard(
     """
     baseline = load_baseline(project_path)
 
-    scan = scan_project(project_path)
+    scan = scan_project(project_path, config=config)
     if scan.file_count == 0:
         raise ValueError(f"No files found in {project_path}")
 
@@ -191,3 +191,4 @@ def run_pr_guard(
         max_drop=max_drop,
         passed=passed,
     )
+

@@ -86,12 +86,12 @@ def compare_projects(
     right_label = label_right or _label(path_right)
 
     # --- Left side ---
-    scan_l = scan_project(path_left)
+    scan_l = scan_project(path_left, config=cfg)
     analysis_l = analyze_project(scan_l)
     score_l = compute_score(analysis_l, config=cfg)
 
     # --- Right side ---
-    scan_r = scan_project(path_right)
+    scan_r = scan_project(path_right, config=cfg)
     analysis_r = analyze_project(scan_r)
     score_r = compute_score(analysis_r, config=cfg)
 
@@ -139,3 +139,4 @@ def compare_projects(
         score_delta=score_delta,
         category_winners=category_winners,
     )
+

@@ -48,7 +48,7 @@ class ChallengeResult:
 
 def _analyze_snapshot(path: Path, label: str, cfg: BenchForgeConfig) -> ProjectSnapshot:
     """Run full pipeline on a single path and return a ProjectSnapshot."""
-    scan = scan_project(path)
+    scan = scan_project(path, config=cfg)
     analysis = analyze_project(scan)
     score = compute_score(analysis, config=cfg)
     return ProjectSnapshot(label=label, path=path, scan=scan, analysis=analysis, score=score)
@@ -133,3 +133,4 @@ def run_challenge(
         category_rankings=category_rankings,
         is_tie=is_tie,
     )
+

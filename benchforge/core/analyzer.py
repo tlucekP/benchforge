@@ -1,4 +1,4 @@
-"""Static code analyzer — detects structural issues using AST and radon.
+﻿"""Static code analyzer - detects structural issues using AST and radon.
 
 Security note: this module NEVER executes user code.
 All analysis is performed via read-only AST parsing.
@@ -17,22 +17,20 @@ from radon.metrics import mi_visit
 
 from benchforge.core.scanner import ScanResult
 
-# Functions longer than this line count are flagged.
 LONG_FUNCTION_THRESHOLD = 50
-
-# Cyclomatic complexity above this is flagged as high.
 HIGH_COMPLEXITY_THRESHOLD = 10
+MIN_DUPLICATE_BODY_LINES = 3
 
 
 @dataclass
 class Issue:
     """A single detected code issue."""
 
-    category: str        # e.g. "nested_loop", "long_function"
+    category: str
     description: str
-    file: str            # relative path string for display
+    file: str
     line: int | None = None
-    severity: str = "warning"   # "warning" | "error" | "info"
+    severity: str = "warning"
 
 
 @dataclass
@@ -58,10 +56,6 @@ class AnalysisResult:
     avg_maintainability: float = 100.0
     duplicate_groups: list[list[str]] = field(default_factory=list)
 
-
-# ---------------------------------------------------------------------------
-# Internal AST visitors
-# ---------------------------------------------------------------------------
 
 class _NestedLoopVisitor(ast.NodeVisitor):
     """Detects for/while loops nested inside other for/while loops."""
@@ -91,12 +85,12 @@ class _NestedLoopVisitor(ast.NodeVisitor):
 
 
 class _UnusedImportVisitor(ast.NodeVisitor):
-    """Detects imported names that are never referenced in the module body."""
+    """Detect imported names that are never referenced in the module body."""
 
     def __init__(self, rel_path: str) -> None:
         self.issues: list[Issue] = []
         self._rel_path = rel_path
-        self._imported: dict[str, int] = {}   # name -> line number
+        self._imported: dict[str, int] = {}
         self._used: set[str] = set()
 
     def visit_Import(self, node: ast.Import) -> None:
@@ -107,7 +101,9 @@ class _UnusedImportVisitor(ast.NodeVisitor):
     def visit_ImportFrom(self, node: ast.ImportFrom) -> None:
         for alias in node.names:
             if alias.name == "*":
-                return  # Star imports: skip — can't reliably detect usage
+                return
+            if node.module == "__future__" and alias.name == "annotations":
+                continue
             name = alias.asname if alias.asname else alias.name
             self._imported[name] = node.lineno
 
@@ -115,7 +111,6 @@ class _UnusedImportVisitor(ast.NodeVisitor):
         self._used.add(node.id)
 
     def visit_Attribute(self, node: ast.Attribute) -> None:
-        # Walk down to root Name node to capture module usage like `os.path`.
         root = node
         while isinstance(root, ast.Attribute):
             root = root.value
@@ -137,12 +132,7 @@ class _UnusedImportVisitor(ast.NodeVisitor):
                 )
 
 
-# ---------------------------------------------------------------------------
-# Per-file analysis
-# ---------------------------------------------------------------------------
-
 def _detect_long_functions(tree: ast.AST, rel_path: str) -> list[Issue]:
-    """Return issues for functions/methods exceeding LONG_FUNCTION_THRESHOLD lines."""
     issues: list[Issue] = []
     for node in ast.walk(tree):
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
@@ -166,7 +156,6 @@ def _detect_long_functions(tree: ast.AST, rel_path: str) -> list[Issue]:
 
 
 def _detect_high_complexity(source: str, rel_path: str) -> tuple[list[Issue], float]:
-    """Use radon to detect high cyclomatic complexity. Returns (issues, avg_complexity)."""
     issues: list[Issue] = []
     try:
         results = cc_visit(source)
@@ -193,12 +182,10 @@ def _detect_high_complexity(source: str, rel_path: str) -> tuple[list[Issue], fl
                 )
             )
 
-    avg = round(total / len(results), 2)
-    return issues, avg
+    return issues, round(total / len(results), 2)
 
 
 def _get_maintainability_index(source: str) -> float:
-    """Return radon maintainability index (0-100). Returns 100.0 on failure."""
     try:
         mi = mi_visit(source, multi=True)
         return round(float(mi), 2)
@@ -207,15 +194,7 @@ def _get_maintainability_index(source: str) -> float:
 
 
 def analyze_file(path: Path, root: Path) -> FileAnalysis:
-    """Analyze a single Python file for structural issues.
-
-    Args:
-        path: Absolute path to the Python file.
-        root: Project root, used to compute relative paths for display.
-
-    Returns:
-        FileAnalysis with all detected issues and metrics.
-    """
+    """Analyze a single Python file for structural issues."""
     try:
         rel_path = str(path.relative_to(root))
     except ValueError:
@@ -235,43 +214,31 @@ def analyze_file(path: Path, root: Path) -> FileAnalysis:
         result.parse_error = f"Syntax error: {exc}"
         return result
 
-    # Nested loops
     loop_visitor = _NestedLoopVisitor(rel_path)
     loop_visitor.visit(tree)
     result.issues.extend(loop_visitor.issues)
 
-    # Long functions
     result.issues.extend(_detect_long_functions(tree, rel_path))
 
-    # Unused imports
     import_visitor = _UnusedImportVisitor(rel_path)
     import_visitor.visit(tree)
     import_visitor.finalize()
     result.issues.extend(import_visitor.issues)
 
-    # Cyclomatic complexity (radon)
     complexity_issues, avg_cc = _detect_high_complexity(source, rel_path)
     result.issues.extend(complexity_issues)
     result.avg_complexity = avg_cc
 
-    # Count functions
     result.function_count = sum(
         1 for node in ast.walk(tree)
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
     )
-
-    # Maintainability index (radon)
     result.maintainability_index = _get_maintainability_index(source)
-
     return result
 
 
-# ---------------------------------------------------------------------------
-# Duplicate detection
-# ---------------------------------------------------------------------------
-
 def _hash_function_body(node: ast.FunctionDef | ast.AsyncFunctionDef) -> str:
-    """Produce a stable hash of a function's body, ignoring names and whitespace."""
+    """Produce a stable hash of a function body, ignoring names and whitespace."""
     try:
         source = ast.unparse(node.body)
     except Exception:
@@ -280,12 +247,27 @@ def _hash_function_body(node: ast.FunctionDef | ast.AsyncFunctionDef) -> str:
     return hashlib.sha256(normalized.encode()).hexdigest()
 
 
-def _find_duplicate_functions(py_files: list[FileAnalysis], root: Path) -> list[list[str]]:
-    """Detect functions with identical bodies across all analyzed files.
+def _has_fixture_decorator(node: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
+    for decorator in node.decorator_list:
+        target = decorator.func if isinstance(decorator, ast.Call) else decorator
+        if isinstance(target, ast.Name) and target.id == "fixture":
+            return True
+        if isinstance(target, ast.Attribute) and target.attr == "fixture":
+            return True
+    return False
 
-    Returns a list of duplicate groups, each group being a list of
-    'file:line:function_name' strings.
-    """
+
+def _is_duplicate_candidate(node: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
+    if _has_fixture_decorator(node) or not node.body:
+        return False
+    start = getattr(node.body[0], "lineno", node.lineno)
+    last = node.body[-1]
+    end = getattr(last, "end_lineno", getattr(last, "lineno", start))
+    return (end - start + 1) > MIN_DUPLICATE_BODY_LINES
+
+
+def _find_duplicate_functions(py_files: list[FileAnalysis], root: Path) -> list[list[str]]:
+    """Detect functions with identical bodies across all analyzed files."""
     body_map: dict[str, list[str]] = {}
 
     for file_analysis in py_files:
@@ -304,6 +286,8 @@ def _find_duplicate_functions(py_files: list[FileAnalysis], root: Path) -> list[
 
         for node in ast.walk(tree):
             if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                if not _is_duplicate_candidate(node):
+                    continue
                 body_hash = _hash_function_body(node)
                 if not body_hash:
                     continue
@@ -313,80 +297,58 @@ def _find_duplicate_functions(py_files: list[FileAnalysis], root: Path) -> list[
     return [group for group in body_map.values() if len(group) > 1]
 
 
-# ---------------------------------------------------------------------------
-# Project-level analysis
-# ---------------------------------------------------------------------------
-
 def analyze_project(scan_result: ScanResult) -> AnalysisResult:
-    """Analyze all Python files discovered in a ScanResult.
-
-    Args:
-        scan_result: Output from scanner.scan_project().
-
-    Returns:
-        AnalysisResult aggregating findings across all files.
-    """
+    """Analyze all Python files discovered in a ScanResult."""
     py_files = [f for f in scan_result.files if f.suffix.lower() == ".py"]
+    file_analyses: list[FileAnalysis] = [analyze_file(f, scan_result.root) for f in py_files]
 
-    file_analyses: list[FileAnalysis] = [
-        analyze_file(f, scan_result.root) for f in py_files
-    ]
-
-    # Aggregate metrics
-    total_issues = sum(len(fa.issues) for fa in file_analyses)
     issue_breakdown: dict[str, int] = {}
-    for fa in file_analyses:
-        for issue in fa.issues:
+    for file_analysis in file_analyses:
+        for issue in file_analysis.issues:
             issue_breakdown[issue.category] = issue_breakdown.get(issue.category, 0) + 1
 
     complexities = [fa.avg_complexity for fa in file_analyses if fa.avg_complexity > 0]
     avg_complexity = round(sum(complexities) / len(complexities), 2) if complexities else 0.0
 
     maintainabilities = [fa.maintainability_index for fa in file_analyses]
-    avg_maintainability = (
-        round(sum(maintainabilities) / len(maintainabilities), 2)
-        if maintainabilities else 100.0
-    )
+    avg_maintainability = round(sum(maintainabilities) / len(maintainabilities), 2) if maintainabilities else 100.0
 
     duplicate_groups = _find_duplicate_functions(file_analyses, scan_result.root)
 
-    # Add duplicate issues to the relevant FileAnalysis objects
     for group in duplicate_groups:
         for entry in group:
-            # entry format: "rel/path.py:line:name"
             parts = entry.rsplit(":", 2)
-            if len(parts) == 3:
-                rel_path, lineno_str, func_name = parts
+            if len(parts) != 3:
+                continue
+            rel_path, lineno_str, func_name = parts
+            try:
+                lineno = int(lineno_str)
+            except ValueError:
+                lineno = None
+            for file_analysis in file_analyses:
                 try:
-                    lineno = int(lineno_str)
+                    file_rel = str(file_analysis.path.relative_to(scan_result.root))
                 except ValueError:
-                    lineno = None
-                # Find the matching FileAnalysis and append issue
-                for fa in file_analyses:
-                    try:
-                        fa_rel = str(fa.path.relative_to(scan_result.root))
-                    except ValueError:
-                        fa_rel = fa.path.name
-                    if fa_rel == rel_path:
-                        fa.issues.append(
-                            Issue(
-                                category="duplicate_code",
-                                description=(
-                                    f"Function '{func_name}' appears to be a duplicate "
-                                    f"(identical body found in {len(group) - 1} other location(s))."
-                                ),
-                                file=rel_path,
-                                line=lineno,
-                                severity="info",
-                            )
+                    file_rel = file_analysis.path.name
+                if file_rel == rel_path:
+                    file_analysis.issues.append(
+                        Issue(
+                            category="duplicate_code",
+                            description=(
+                                f"Function '{func_name}' appears to be a duplicate "
+                                f"(identical body found in {len(group) - 1} other location(s))."
+                            ),
+                            file=rel_path,
+                            line=lineno,
+                            severity="info",
                         )
-                        break
+                    )
+                    break
 
-    # Recount after duplicate issues are added
-    total_issues = sum(len(fa.issues) for fa in file_analyses)
+    total_issues = sum(len(file_analysis.issues) for file_analysis in file_analyses)
     issue_breakdown = {}
-    for fa in file_analyses:
-        for issue in fa.issues:
+    for file_analysis in file_analyses:
+        for issue in file_analysis.issues:
             issue_breakdown[issue.category] = issue_breakdown.get(issue.category, 0) + 1
 
     return AnalysisResult(

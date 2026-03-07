@@ -1,8 +1,8 @@
-# BenchForge
+﻿# BenchForge
 
 **BenchForge** is a code benchmarking and quality analysis tool built for the **AI coding era**.
 
-It helps developers — especially **vibecoders** — quickly answer a simple but critical question:
+It helps developers - especially **vibecoders** - quickly answer a simple but critical question:
 
 > *Is this code actually good, or does it only look good?*
 
@@ -40,6 +40,8 @@ Scans your repository and detects:
 * project size
 * modules
 
+BenchForge scores **production code by default**. Test directories and package metadata are excluded from scoring unless you include them explicitly in `.benchforge.toml`.
+
 ---
 
 ### Static Code Analysis
@@ -50,6 +52,11 @@ Detects common structural issues:
 * long functions
 * duplicate code
 * unused imports
+
+The default rules aim to reduce noise:
+
+* `from __future__ import annotations` is ignored for unused-import detection
+* tiny duplicate helpers and pytest fixtures are ignored by duplicate detection
 
 ---
 
@@ -91,7 +98,7 @@ Problem
 Nested loop detected.
 
 Impact
-Function scales approximately as O(n²).
+Function scales approximately as O(n^2).
 
 Suggestion
 Use a dictionary lookup to avoid repeated list scanning.
@@ -130,6 +137,9 @@ benchforge benchmark .
 # Generate an HTML report
 benchforge report .
 
+# Generate an SVG badge
+benchforge badge .
+
 # Show file heatmap
 benchforge analyze . --heatmap
 
@@ -146,6 +156,7 @@ benchforge analyze . --format json
 | `benchforge analyze PATH` | Static analysis + scoring |
 | `benchforge benchmark PATH` | Runtime and memory benchmarking |
 | `benchforge report PATH` | Full pipeline + HTML report |
+| `benchforge badge PATH` | Generate an SVG badge for the current score |
 | `benchforge compare PATH_A PATH_B` | Side-by-side comparison of two projects |
 | `benchforge challenge PATH...` | Ranked leaderboard for N implementations |
 | `benchforge roast PATH` | Fun but honest code insights |
@@ -160,6 +171,16 @@ benchforge analyze . --format json          # JSON output
 benchforge analyze . --heatmap              # show file heatmap
 benchforge analyze . --heatmap --top 20     # top 20 hottest files
 benchforge analyze . --ai                   # add AI insight (requires MISTRAL_API_KEY)
+```
+
+### badge
+
+```bash
+benchforge badge .
+benchforge badge . --output badge.svg
+benchforge badge . --style plastic
+benchforge badge . --label "code quality"
+benchforge badge . --format json
 ```
 
 ### compare
@@ -216,7 +237,7 @@ benchforge pr-guard . --max-drop 5 --format json
 
 # Example Output
 
-```
+```text
 Project: 38 files
 Language: Python
 
@@ -235,9 +256,13 @@ BenchForge Score: 77
 
 # Configuration
 
-Create `.benchforge.toml` in your project root to customize scoring:
+Create `.benchforge.toml` in your project root to customize scoring and scope:
 
 ```toml
+[scope]
+exclude = ["tests/**", "dist/**"]
+# include = ["src/**"]
+
 [scoring.weights]
 performance     = 0.40
 maintainability = 0.35
@@ -250,6 +275,8 @@ long_function   = 5.0
 [ci]
 min_score = 70
 ```
+
+Default scope excludes common non-production paths such as `tests/**` and `*.egg-info/**`.
 
 See `docs/scoring.md` for full reference.
 
@@ -295,9 +322,11 @@ Quick example:
 * `ci` - quality gate with configurable threshold
 * `pr-guard` - PR regression check with baseline file
 
-## v1.5
+## v1.5 (done)
 
-* `badge` - SVG badge for README
+* `badge` - SVG badge generator for README / CI
+* `scope` config for include / exclude rules
+* lower-noise default analysis for production code
 
 ---
 
@@ -352,4 +381,4 @@ MIT License
 
 # The AI Coding Era Needs Better Tools
 
-BenchForge exists to help developers **trust their code again** — even when it was written with the help of AI.
+BenchForge exists to help developers **trust their code again** - even when it was written with the help of AI.

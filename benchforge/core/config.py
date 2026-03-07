@@ -1,9 +1,13 @@
-"""BenchForge user configuration loader.
+﻿"""BenchForge user configuration loader.
 
 Reads an optional `.benchforge.toml` file from the project root.
-All settings are optional — missing keys fall back to built-in defaults.
+All settings are optional - missing keys fall back to built-in defaults.
 
 Example .benchforge.toml:
+    [scope]
+    include = ["src/**", "benchforge/**"]
+    exclude = ["tests/**", "dist/**"]
+
     [scoring.weights]
     performance     = 0.40
     maintainability = 0.35
@@ -36,9 +40,21 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 CONFIG_FILENAME = ".benchforge.toml"
+DEFAULT_SCOPE_INCLUDE: tuple[str, ...] = ()
+DEFAULT_SCOPE_EXCLUDE: tuple[str, ...] = (
+    "tests/**",
+    "test/**",
+    "testing/**",
+    "**/tests/**",
+    "**/test/**",
+    "**/testing/**",
+    "*.egg-info/**",
+    "**/*.egg-info/**",
+)
+
 
 # ---------------------------------------------------------------------------
-# TOML parser — stdlib (3.11+) with fallback to tomli
+# TOML parser - stdlib (3.11+) with fallback to tomli
 # ---------------------------------------------------------------------------
 
 def _load_toml(path: Path) -> dict:
@@ -60,6 +76,18 @@ def _load_toml(path: Path) -> dict:
 # ---------------------------------------------------------------------------
 # Config dataclass
 # ---------------------------------------------------------------------------
+
+@dataclass
+class ScopeConfig:
+    include: list[str] = field(default_factory=lambda: list(DEFAULT_SCOPE_INCLUDE))
+    exclude: list[str] = field(default_factory=lambda: list(DEFAULT_SCOPE_EXCLUDE))
+
+    def validate(self) -> None:
+        for group_name, patterns in (("include", self.include), ("exclude", self.exclude)):
+            for pattern in patterns:
+                if not isinstance(pattern, str) or not pattern.strip():
+                    raise ValueError(f"[scope.{group_name}] patterns must be non-empty strings.")
+
 
 @dataclass
 class ScoringWeights:
@@ -148,6 +176,7 @@ class CiConfig:
 
 @dataclass
 class BenchForgeConfig:
+    scope: ScopeConfig = field(default_factory=ScopeConfig)
     weights: ScoringWeights = field(default_factory=ScoringWeights)
     penalties: ScoringPenalties = field(default_factory=ScoringPenalties)
     thresholds: ScoringThresholds = field(default_factory=ScoringThresholds)
@@ -155,6 +184,7 @@ class BenchForgeConfig:
     config_path: Path | None = None  # None = using built-in defaults
 
     def validate(self) -> None:
+        self.scope.validate()
         self.weights.validate()
         self.penalties.validate()
         self.thresholds.validate()
@@ -166,17 +196,7 @@ class BenchForgeConfig:
 # ---------------------------------------------------------------------------
 
 def load_config(project_root: Path) -> BenchForgeConfig:
-    """Load .benchforge.toml from project_root if it exists.
-
-    Returns BenchForgeConfig with built-in defaults if the file is absent
-    or TOML support is unavailable. Raises ValueError on invalid values.
-
-    Args:
-        project_root: Directory to search for .benchforge.toml.
-
-    Returns:
-        BenchForgeConfig instance (validated).
-    """
+    """Load .benchforge.toml from project_root if it exists."""
     config_file = project_root / CONFIG_FILENAME
 
     if not config_file.exists():
@@ -184,15 +204,19 @@ def load_config(project_root: Path) -> BenchForgeConfig:
 
     raw = _load_toml(config_file)
     if not raw:
-        # File exists but TOML not parseable (no tomllib/tomli) — use defaults
         return BenchForgeConfig()
 
+    scope_raw = raw.get("scope", {})
     scoring_raw = raw.get("scoring", {})
     weights_raw = scoring_raw.get("weights", {})
     penalties_raw = scoring_raw.get("penalties", {})
     thresholds_raw = scoring_raw.get("thresholds", {})
     ci_raw = raw.get("ci", {})
 
+    scope = ScopeConfig(
+        include=list(scope_raw.get("include", list(DEFAULT_SCOPE_INCLUDE))),
+        exclude=list(scope_raw.get("exclude", list(DEFAULT_SCOPE_EXCLUDE))),
+    )
     weights = ScoringWeights(
         performance=float(weights_raw.get("performance", ScoringWeights.performance)),
         maintainability=float(weights_raw.get("maintainability", ScoringWeights.maintainability)),
@@ -215,12 +239,12 @@ def load_config(project_root: Path) -> BenchForgeConfig:
         memory_small_mb=float(thresholds_raw.get("memory_small_mb", ScoringThresholds.memory_small_mb)),
         memory_large_mb=float(thresholds_raw.get("memory_large_mb", ScoringThresholds.memory_large_mb)),
     )
-
     ci = CiConfig(
         min_score=int(ci_raw.get("min_score", CiConfig.min_score)),
     )
 
     cfg = BenchForgeConfig(
+        scope=scope,
         weights=weights,
         penalties=penalties,
         thresholds=thresholds,

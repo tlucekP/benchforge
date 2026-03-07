@@ -61,7 +61,7 @@ def run_ci_check(
     """
     min_score = min_score_override if min_score_override is not None else config.ci.min_score
 
-    scan = scan_project(project_path)
+    scan = scan_project(project_path, config=config)
 
     if scan.file_count == 0:
         raise ValueError(f"No files found in {project_path}")
@@ -79,3 +79,4 @@ def run_ci_check(
         min_score=min_score,
         passed=passed,
     )
+

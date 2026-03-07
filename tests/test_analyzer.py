@@ -134,3 +134,40 @@ class TestAnalyzeProject:
         scan = scan_project(tmp_path)
         result = analyze_project(scan)
         assert result.files == []
+
+    def test_ignores_future_annotations_import(self, tmp_path: Path) -> None:
+        file = tmp_path / "future_annotations.py"
+        file.write_text(
+            "from __future__ import annotations\n\n"
+            "def greet(name: str) -> str:\n"
+            "    return name\n",
+            encoding="utf-8",
+        )
+        result = analyze_file(file, root=tmp_path)
+        unused = [i.description for i in result.issues if i.category == "unused_import"]
+        assert not any("annotations" in description for description in unused)
+
+    def test_short_duplicate_helpers_are_ignored(self, tmp_path: Path) -> None:
+        left = tmp_path / "left.py"
+        right = tmp_path / "right.py"
+        left.write_text("def helper():\n    return 1\n", encoding="utf-8")
+        right.write_text("def helper2():\n    return 1\n", encoding="utf-8")
+        scan = scan_project(tmp_path)
+        result = analyze_project(scan)
+        assert result.issue_breakdown.get("duplicate_code", 0) == 0
+
+    def test_meaningful_duplicate_functions_are_detected(self, tmp_path: Path) -> None:
+        left = tmp_path / "left.py"
+        right = tmp_path / "right.py"
+        body = (
+            "def transform(items):\n"
+            "    data = []\n"
+            "    for item in items:\n"
+            "        data.append(item * 2)\n"
+            "    return data\n"
+        )
+        left.write_text(body, encoding="utf-8")
+        right.write_text(body.replace("transform", "transform_again"), encoding="utf-8")
+        scan = scan_project(tmp_path)
+        result = analyze_project(scan)
+        assert result.issue_breakdown.get("duplicate_code", 0) == 2
