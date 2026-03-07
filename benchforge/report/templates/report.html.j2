@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BenchForge Report — {{ project_path }}</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #0f1117;
+      color: #e2e8f0;
+      padding: 2rem;
+      line-height: 1.6;
+    }
+    h1 { font-size: 2rem; font-weight: 700; color: #f8fafc; margin-bottom: 0.25rem; }
+    h2 { font-size: 1.25rem; font-weight: 600; color: #94a3b8; margin: 2rem 0 1rem; text-transform: uppercase; letter-spacing: 0.05em; }
+    h3 { font-size: 1rem; font-weight: 600; color: #cbd5e1; margin-bottom: 0.5rem; }
+    .subtitle { color: #64748b; font-size: 0.9rem; margin-bottom: 2.5rem; }
+
+    /* Score cards */
+    .score-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 1rem;
+      margin-bottom: 2rem;
+    }
+    .score-card {
+      background: #1e2433;
+      border: 1px solid #2d3748;
+      border-radius: 12px;
+      padding: 1.25rem;
+      text-align: center;
+    }
+    .score-card .label { font-size: 0.75rem; color: #64748b; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 0.5rem; }
+    .score-card .value {
+      font-size: 2.5rem;
+      font-weight: 700;
+      line-height: 1;
+    }
+    .score-card.main { border-color: #3b82f6; background: #1a2540; }
+    .score-card.main .value { color: #60a5fa; font-size: 3rem; }
+
+    .score-good { color: #4ade80; }
+    .score-ok   { color: #facc15; }
+    .score-bad  { color: #f87171; }
+
+    /* Summary table */
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 0.75rem;
+      margin-bottom: 2rem;
+    }
+    .summary-item {
+      background: #1e2433;
+      border: 1px solid #2d3748;
+      border-radius: 8px;
+      padding: 0.75rem 1rem;
+    }
+    .summary-item .key { font-size: 0.75rem; color: #64748b; }
+    .summary-item .val { font-size: 1rem; font-weight: 600; color: #e2e8f0; }
+
+    /* Tables */
+    table { width: 100%; border-collapse: collapse; font-size: 0.875rem; margin-bottom: 2rem; }
+    th { background: #1e2433; color: #94a3b8; padding: 0.6rem 0.75rem; text-align: left; border-bottom: 1px solid #2d3748; font-weight: 600; }
+    td { padding: 0.6rem 0.75rem; border-bottom: 1px solid #1e2433; vertical-align: top; }
+    tr:hover td { background: #1a2035; }
+
+    /* Issue severity badges */
+    .badge {
+      display: inline-block;
+      padding: 0.15rem 0.5rem;
+      border-radius: 4px;
+      font-size: 0.7rem;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+    .badge-warning { background: #78350f; color: #fbbf24; }
+    .badge-error   { background: #7f1d1d; color: #f87171; }
+    .badge-info    { background: #1e3a5f; color: #60a5fa; }
+
+    /* Code/mono */
+    code { font-family: "Fira Code", "Cascadia Code", monospace; font-size: 0.82rem; color: #7dd3fc; background: #1a2540; padding: 0.1rem 0.3rem; border-radius: 3px; }
+
+    /* Empty state */
+    .empty { color: #4ade80; background: #052e16; border: 1px solid #166534; border-radius: 8px; padding: 1rem; margin-bottom: 1rem; }
+
+    /* No benchmark */
+    .info-box { color: #93c5fd; background: #1e3a5f; border: 1px solid #1d4ed8; border-radius: 8px; padding: 1rem; margin-bottom: 1rem; font-size: 0.875rem; }
+
+    footer { margin-top: 3rem; color: #334155; font-size: 0.75rem; border-top: 1px solid #1e2433; padding-top: 1rem; }
+  </style>
+</head>
+<body>
+
+<h1>BenchForge Report</h1>
+<p class="subtitle">Project: <code>{{ project_path }}</code></p>
+
+<!-- ===== SCORE SUMMARY ===== -->
+<h2>Quality Score</h2>
+<div class="score-grid">
+  <div class="score-card main">
+    <div class="label">BenchForge Score</div>
+    <div class="value {% if score.benchforge_score >= 80 %}score-good{% elif score.benchforge_score >= 55 %}score-ok{% else %}score-bad{% endif %}">
+      {{ score.benchforge_score }}
+    </div>
+  </div>
+  <div class="score-card">
+    <div class="label">Performance</div>
+    <div class="value {% if score.performance >= 80 %}score-good{% elif score.performance >= 55 %}score-ok{% else %}score-bad{% endif %}">
+      {{ score.performance }}
+    </div>
+  </div>
+  <div class="score-card">
+    <div class="label">Maintainability</div>
+    <div class="value {% if score.maintainability >= 80 %}score-good{% elif score.maintainability >= 55 %}score-ok{% else %}score-bad{% endif %}">
+      {{ score.maintainability }}
+    </div>
+  </div>
+  <div class="score-card">
+    <div class="label">Memory</div>
+    <div class="value {% if score.memory >= 80 %}score-good{% elif score.memory >= 55 %}score-ok{% else %}score-bad{% endif %}">
+      {{ score.memory }}
+    </div>
+  </div>
+</div>
+
+{% if not score.has_benchmark_data %}
+<div class="info-box">
+  Performance and Memory scores are derived from static analysis only.
+  Run <code>benchforge benchmark .</code> for measurement-based scores.
+</div>
+{% endif %}
+
+<!-- ===== PROJECT SUMMARY ===== -->
+<h2>Project Summary</h2>
+<div class="summary-grid">
+  <div class="summary-item">
+    <div class="key">Files</div>
+    <div class="val">{{ scan.file_count }}</div>
+  </div>
+  <div class="summary-item">
+    <div class="key">Primary Language</div>
+    <div class="val">{{ scan.primary_language or "Unknown" }}</div>
+  </div>
+  <div class="summary-item">
+    <div class="key">Total Size</div>
+    <div class="val">{{ scan.total_size_kb }} KB</div>
+  </div>
+  <div class="summary-item">
+    <div class="key">Python Packages</div>
+    <div class="val">{{ scan.modules | length }}</div>
+  </div>
+  <div class="summary-item">
+    <div class="key">Total Issues</div>
+    <div class="val">{{ issues | length }}</div>
+  </div>
+  <div class="summary-item">
+    <div class="key">Files Analyzed</div>
+    <div class="val">{{ file_analyses | length }}</div>
+  </div>
+</div>
+
+<!-- ===== DETECTED ISSUES ===== -->
+<h2>Detected Issues</h2>
+
+{% if issues %}
+<table>
+  <thead>
+    <tr>
+      <th>Severity</th>
+      <th>Category</th>
+      <th>File</th>
+      <th>Line</th>
+      <th>Description</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for issue in issues %}
+    <tr>
+      <td><span class="badge badge-{{ issue.severity }}">{{ issue.severity }}</span></td>
+      <td><code>{{ issue.category }}</code></td>
+      <td><code>{{ issue.file }}</code></td>
+      <td>{% if issue.line %}{{ issue.line }}{% else %}—{% endif %}</td>
+      <td>{{ issue.description }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<div class="empty">No issues detected. Code looks clean!</div>
+{% endif %}
+
+<!-- ===== ISSUE BREAKDOWN ===== -->
+{% if issue_breakdown %}
+<h2>Issue Breakdown</h2>
+<table>
+  <thead>
+    <tr><th>Category</th><th>Count</th></tr>
+  </thead>
+  <tbody>
+    {% for category, count in issue_breakdown.items() | sort(attribute='1', reverse=True) %}
+    <tr>
+      <td><code>{{ category }}</code></td>
+      <td>{{ count }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+
+<!-- ===== BENCHMARK RESULTS ===== -->
+{% if benchmark and benchmark.functions %}
+<h2>Benchmark Results</h2>
+<table>
+  <thead>
+    <tr>
+      <th>Function</th>
+      <th>Mean (ms)</th>
+      <th>Min (ms)</th>
+      <th>Max (ms)</th>
+      <th>Peak Memory (MB)</th>
+      <th>Runs</th>
+      <th>Status</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for fn in benchmark.functions %}
+    <tr>
+      <td><code>{{ fn.name }}</code></td>
+      <td>{{ fn.mean_runtime_ms }}</td>
+      <td>{{ fn.min_runtime_ms }}</td>
+      <td>{{ fn.max_runtime_ms }}</td>
+      <td>{{ fn.peak_memory_mb }}</td>
+      <td>{{ fn.runs }}</td>
+      <td>
+        {% if fn.error %}
+          <span class="badge badge-error">Error</span>
+        {% else %}
+          <span class="badge badge-info">OK</span>
+        {% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<h2>Benchmark Results</h2>
+<div class="info-box">
+  No benchmark data available. Run <code>benchforge benchmark &lt;path&gt;</code> to collect runtime metrics.
+</div>
+{% endif %}
+
+<!-- ===== PER-FILE ANALYSIS ===== -->
+<h2>Per-File Analysis</h2>
+<table>
+  <thead>
+    <tr>
+      <th>File</th>
+      <th>Functions</th>
+      <th>Avg Complexity</th>
+      <th>Maintainability Index</th>
+      <th>Issues</th>
+      <th>Parse Error</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for fa in file_analyses %}
+    <tr>
+      <td><code>{{ fa.path.name }}</code></td>
+      <td>{{ fa.function_count }}</td>
+      <td>{{ fa.avg_complexity }}</td>
+      <td>{{ fa.maintainability_index }}</td>
+      <td>{{ fa.issues | length }}</td>
+      <td>{% if fa.parse_error %}<span class="badge badge-error">{{ fa.parse_error[:60] }}</span>{% else %}—{% endif %}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<footer>
+  Generated by <strong>BenchForge</strong> v0.1.0 &mdash; <em>Is this code actually good, or does it only look good?</em>
+</footer>
+
+</body>
+</html>
