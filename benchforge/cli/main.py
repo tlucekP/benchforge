@@ -537,3 +537,217 @@ def report(path: str, output: str, use_ai: bool) -> None:
 
     # Quick summary in terminal too
     _print_scores(score)
+
+
+# ---------------------------------------------------------------------------
+# compare command
+# ---------------------------------------------------------------------------
+
+@cli.command()
+@click.argument("path_a", metavar="PATH_A")
+@click.argument("path_b", metavar="PATH_B")
+@click.option("--label-a", default=None, help="Display label for PATH_A (default: directory name).")
+@click.option("--label-b", default=None, help="Display label for PATH_B (default: directory name).")
+@click.option(
+    "--format", "output_format",
+    type=click.Choice(["text", "json"], case_sensitive=False),
+    default="text",
+    show_default=True,
+    help="Output format: text (default) or json.",
+)
+def compare(
+    path_a: str,
+    path_b: str,
+    label_a: str | None,
+    label_b: str | None,
+    output_format: str,
+) -> None:
+    """Compare two project directories side-by-side.
+
+    PATH_A is typically the human implementation,
+    PATH_B is typically the AI-generated implementation.
+    """
+    from benchforge.core.comparator import compare_projects
+
+    try:
+        proj_a = _resolve_path(path_a)
+        proj_b = _resolve_path(path_b)
+    except click.BadParameter as exc:
+        err_console.print(f"Error: {exc}")
+        sys.exit(1)
+
+    if output_format == "text":
+        console.print(
+            f"\n[bold]BenchForge Compare[/bold] — "
+            f"[cyan]{label_a or proj_a.name}[/cyan] vs "
+            f"[cyan]{label_b or proj_b.name}[/cyan]\n"
+        )
+
+    cfg_a = _load_project_config(proj_a)
+
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[progress.description]{task.description}"),
+        TimeElapsedColumn(),
+        console=console,
+        transient=True,
+        disable=(output_format == "json"),
+    ) as progress:
+        task = progress.add_task(f"Analyzing {label_a or proj_a.name}...", total=None)
+
+        try:
+            result = compare_projects(
+                proj_a, proj_b,
+                label_left=label_a,
+                label_right=label_b,
+                config=cfg_a,
+            )
+        except NotADirectoryError as exc:
+            err_console.print(f"Error: {exc}")
+            sys.exit(1)
+
+        progress.update(task, description="Done.")
+
+    if output_format == "json":
+        payload = {
+            "left": {
+                "label": result.left.label,
+                "path": str(result.left.path),
+                "scan": _scan_to_dict(result.left.scan),
+                "analysis": _analysis_to_dict(result.left.analysis),
+                "score": _score_to_dict(result.left.score),
+            },
+            "right": {
+                "label": result.right.label,
+                "path": str(result.right.path),
+                "scan": _scan_to_dict(result.right.scan),
+                "analysis": _analysis_to_dict(result.right.analysis),
+                "score": _score_to_dict(result.right.score),
+            },
+            "winner": result.winner,
+            "score_delta": result.score_delta,
+            "category_winners": result.category_winners,
+        }
+        click.echo(json.dumps(payload, indent=2, ensure_ascii=False))
+        return
+
+    _print_compare_table(result)
+
+
+def _winner_marker(category: str, category_winners: dict[str, str], side: str) -> str:
+    """Return a checkmark if this side won the category, else empty string."""
+    winner = category_winners.get(category, "tie")
+    if winner == side:
+        return " [green]✓[/green]"
+    if winner == "tie":
+        return " [dim]=[/dim]"
+    return ""
+
+
+def _print_compare_table(result: object) -> None:
+    """Render a rich side-by-side comparison table."""
+    from benchforge.core.comparator import CompareResult
+    assert isinstance(result, CompareResult)
+
+    l = result.left
+    r = result.right
+    cw = result.category_winners
+
+    table = Table(
+        title="BenchForge Compare",
+        box=box.ROUNDED,
+        show_lines=True,
+    )
+    table.add_column("Category", style="dim", min_width=20)
+    table.add_column(l.label, justify="right", min_width=14)
+    table.add_column(r.label, justify="right", min_width=14)
+
+    def row(label: str, lval: str, rval: str, category: str) -> None:
+        lmark = _winner_marker(category, cw, "left")
+        rmark = _winner_marker(category, cw, "right")
+        table.add_row(label, f"{lval}{lmark}", f"{rval}{rmark}")
+
+    # Scan info
+    table.add_row("[bold]--- Project ---[/bold]", "", "")
+    table.add_row("Files", str(l.scan.file_count), str(r.scan.file_count))
+    table.add_row("Size (KB)", str(l.scan.total_size_kb), str(r.scan.total_size_kb))
+
+    # Analysis
+    table.add_row("[bold]--- Analysis ---[/bold]", "", "")
+    row("Total Issues", str(l.analysis.total_issues), str(r.analysis.total_issues), "issues")
+    row("Avg Complexity", str(l.analysis.avg_complexity), str(r.analysis.avg_complexity), "complexity")
+    table.add_row(
+        "Avg Maintainability",
+        str(l.analysis.avg_maintainability),
+        str(r.analysis.avg_maintainability),
+    )
+
+    # Scores
+    table.add_row("[bold]--- Scores ---[/bold]", "", "")
+
+    def score_cell(val: int, category: str, side: str) -> str:
+        color = _score_color(val)
+        mark = _winner_marker(category, cw, side)
+        return f"[{color}]{val}[/{color}]{mark}"
+
+    table.add_row(
+        "Performance",
+        score_cell(l.score.performance, "performance", "left"),
+        score_cell(r.score.performance, "performance", "right"),
+    )
+    table.add_row(
+        "Maintainability",
+        score_cell(l.score.maintainability, "maintainability", "left"),
+        score_cell(r.score.maintainability, "maintainability", "right"),
+    )
+    table.add_row(
+        "Memory",
+        score_cell(l.score.memory, "memory", "left"),
+        score_cell(r.score.memory, "memory", "right"),
+    )
+
+    lbs = l.score.benchforge_score
+    rbs = r.score.benchforge_score
+    lbc = _score_color(lbs)
+    rbc = _score_color(rbs)
+    table.add_row(
+        "[bold]BenchForge Score[/bold]",
+        f"[bold][{lbc}]{lbs}[/{lbc}][/bold]",
+        f"[bold][{rbc}]{rbs}[/{rbc}][/bold]",
+    )
+
+    console.print(table)
+
+    # Winner banner
+    if result.winner == "left":
+        winner_label = l.label
+        loser_score = rbs
+        winner_score = lbs
+    elif result.winner == "right":
+        winner_label = r.label
+        loser_score = lbs
+        winner_score = rbs
+    else:
+        winner_label = None
+
+    if winner_label:
+        delta = abs(result.score_delta)
+        console.print(
+            Panel(
+                f"[bold green]{winner_label}[/bold green] wins "
+                f"([green]{winner_score}[/green] vs [red]{loser_score}[/red], "
+                f"delta: +{delta})",
+                title="[bold]Winner[/bold]",
+                border_style="green",
+                expand=False,
+            )
+        )
+    else:
+        console.print(
+            Panel(
+                f"[yellow]Tie![/yellow] Both projects scored [bold]{lbs}[/bold]",
+                title="[bold]Result[/bold]",
+                border_style="yellow",
+                expand=False,
+            )
+        )
