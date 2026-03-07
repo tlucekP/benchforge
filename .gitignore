@@ -36,8 +36,15 @@ htmlcov/
 *.swp
 *.swo
 
+# Environment / secrets
+.env
+.env.*
+
 # Generated reports
 benchforge_report.html
+
+# BenchForge local state
+.benchforge_baseline.json
 
 # pip
 pip-log.txt

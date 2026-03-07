@@ -189,6 +189,24 @@ class TestAnalyzeProject:
         unused = [i.description for i in result.issues if i.category == "unused_import"]
         assert not any("annotations" in description for description in unused)
 
+    def test_ignores_imports_inside_type_checking_block(self, tmp_path: Path) -> None:
+        file = tmp_path / "type_checking.py"
+        file.write_text(
+            "from __future__ import annotations\n"
+            "from typing import TYPE_CHECKING\n"
+            "if TYPE_CHECKING:\n"
+            "    from pathlib import Path\n"
+            "    from collections import OrderedDict\n"
+            "\n"
+            "def greet(name: str) -> str:\n"
+            "    return name\n",
+            encoding="utf-8",
+        )
+        result = analyze_file(file, root=tmp_path)
+        unused = [i.description for i in result.issues if i.category == "unused_import"]
+        assert not any("Path" in d for d in unused)
+        assert not any("OrderedDict" in d for d in unused)
+
     def test_short_duplicate_helpers_are_ignored(self, tmp_path: Path) -> None:
         left = tmp_path / "left.py"
         right = tmp_path / "right.py"

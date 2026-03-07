@@ -64,7 +64,8 @@ def _build_prompt(report_data: "ReportData") -> str:
     if remaining > 0:
         issue_lines += f"\n  ... and {remaining} more issues"
 
-    prompt = f"""You are a senior software engineer reviewing code quality analysis results.
+    prompt = f"""You are a senior software engineer interpreting signals from a static analysis tool.
+These are heuristic scores and pattern detections — not a final verdict on code quality.
 
 PROJECT STATS:
 - Files: {scan.get('file_count', '?')}
@@ -82,24 +83,26 @@ DETECTED ISSUES:
 {issue_lines}
 
 Your task:
-1. Write a 2-3 sentence overall assessment of the code quality.
+1. Write a 2-3 sentence interpretation of what these signals suggest, not a verdict.
 2. For the top 3 most important issues, give a one-line actionable suggestion each.
-3. State the single most impactful improvement the developer should make first.
+3. Suggest the single most impactful improvement the developer might consider first.
 
 Rules:
 - Be concise and developer-friendly (vibecoder audience).
+- Do NOT make definitive quality judgments — frame everything as observations or suggestions, not verdicts.
+- Use suggestive language ("consider", "you might", "it could help to") rather than commands.
 - Do NOT invent issues not listed above.
 - Do NOT comment on style or formatting.
 - Output plain text only, no markdown headers or bullet symbols.
 - Keep total response under 200 words.
 
 Format your response exactly like this:
-SUMMARY: <your 2-3 sentence assessment>
+SUMMARY: <your 2-3 sentence interpretation>
 INSIGHTS:
 <issue category>: <one-line suggestion>
 <issue category>: <one-line suggestion>
 <issue category>: <one-line suggestion>
-TOP SUGGESTION: <single most impactful action>"""
+TOP SUGGESTION: <single most impactful thing to consider, phrased as a suggestion>"""
 
     return prompt
 

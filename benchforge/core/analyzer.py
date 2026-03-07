@@ -116,21 +116,52 @@ class _NestedLoopVisitor(ast.NodeVisitor):
     visit_While = _visit_loop
 
 
+def _collect_type_checking_lines(tree: ast.AST) -> set[int]:
+    """Return line numbers of imports guarded by 'if TYPE_CHECKING:'.
+
+    Imports inside these blocks are type-annotation-only and should not
+    be flagged as unused — they are never executed at runtime.
+    """
+    guarded: set[int] = set()
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.If):
+            continue
+        test = node.test
+        is_type_checking = (
+            (isinstance(test, ast.Name) and test.id == "TYPE_CHECKING")
+            or (
+                isinstance(test, ast.Attribute)
+                and test.attr == "TYPE_CHECKING"
+            )
+        )
+        if not is_type_checking:
+            continue
+        for child in ast.walk(node):
+            if isinstance(child, (ast.Import, ast.ImportFrom)):
+                guarded.add(child.lineno)
+    return guarded
+
+
 class _UnusedImportVisitor(ast.NodeVisitor):
     """Detect imported names that are never referenced in the module body."""
 
-    def __init__(self, rel_path: str) -> None:
+    def __init__(self, rel_path: str, type_checking_lines: set[int]) -> None:
         self.issues: list[Issue] = []
         self._rel_path = rel_path
         self._imported: dict[str, int] = {}
         self._used: set[str] = set()
+        self._type_checking_lines = type_checking_lines
 
     def visit_Import(self, node: ast.Import) -> None:
+        if node.lineno in self._type_checking_lines:
+            return
         for alias in node.names:
             name = alias.asname if alias.asname else alias.name.split(".")[0]
             self._imported[name] = node.lineno
 
     def visit_ImportFrom(self, node: ast.ImportFrom) -> None:
+        if node.lineno in self._type_checking_lines:
+            return
         for alias in node.names:
             if alias.name == "*":
                 return
@@ -252,7 +283,8 @@ def analyze_file(path: Path, root: Path) -> FileAnalysis:
 
     result.issues.extend(_detect_long_functions(tree, rel_path))
 
-    import_visitor = _UnusedImportVisitor(rel_path)
+    tc_lines = _collect_type_checking_lines(tree)
+    import_visitor = _UnusedImportVisitor(rel_path, tc_lines)
     import_visitor.visit(tree)
     import_visitor.finalize()
     result.issues.extend(import_visitor.issues)
