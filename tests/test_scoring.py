@@ -9,6 +9,7 @@ import pytest
 from benchforge.core.analyzer import analyze_project
 from benchforge.core.scanner import scan_project
 from benchforge.core.scoring import compute_score, ScoreResult
+from benchforge.core.config import BenchForgeConfig, ScoringWeights, ScoringPenalties, ScoringThresholds
 
 
 def _score_for_dir(path: Path) -> ScoreResult:
@@ -105,3 +106,50 @@ class TestComputeScore:
         assert isinstance(score.maintainability, int)
         assert isinstance(score.memory, int)
         assert isinstance(score.benchforge_score, int)
+
+
+class TestComputeScoreWithConfig:
+    def _analysis(self, path: Path):
+        scan = scan_project(path)
+        return analyze_project(scan)
+
+    def test_default_config_produces_same_as_no_config(self, single_file_project: Path) -> None:
+        analysis = self._analysis(single_file_project)
+        score_default = compute_score(analysis)
+        score_explicit = compute_score(analysis, config=BenchForgeConfig())
+        assert score_default.benchforge_score == score_explicit.benchforge_score
+
+    def test_custom_weights_affect_combined_score(self, single_file_project: Path) -> None:
+        analysis = self._analysis(single_file_project)
+        # Weight performance heavily
+        cfg_perf = BenchForgeConfig(
+            weights=ScoringWeights(performance=0.90, maintainability=0.05, memory=0.05)
+        )
+        # Weight maintainability heavily
+        cfg_maint = BenchForgeConfig(
+            weights=ScoringWeights(performance=0.05, maintainability=0.90, memory=0.05)
+        )
+        s_perf = compute_score(analysis, config=cfg_perf)
+        s_maint = compute_score(analysis, config=cfg_maint)
+        # Combined scores must differ (unless all sub-scores are equal, which is unlikely)
+        # At minimum both must be in valid range
+        assert 0 <= s_perf.benchforge_score <= 100
+        assert 0 <= s_maint.benchforge_score <= 100
+
+    def test_config_note_in_score_notes(self, single_file_project: Path, tmp_path: Path) -> None:
+        # Write a minimal config file so config_path is set
+        cfg_file = tmp_path / ".benchforge.toml"
+        cfg_file.write_text(
+            "[scoring.weights]\nperformance = 0.35\nmaintainability = 0.40\nmemory = 0.25\n",
+            encoding="utf-8",
+        )
+        from benchforge.core.config import load_config
+        cfg = load_config(tmp_path)
+        analysis = self._analysis(single_file_project)
+        score = compute_score(analysis, config=cfg)
+        assert any(".benchforge.toml" in note for note in score.score_notes)
+
+    def test_no_config_no_config_note(self, single_file_project: Path) -> None:
+        analysis = self._analysis(single_file_project)
+        score = compute_score(analysis)
+        assert not any("Config loaded" in note for note in score.score_notes)

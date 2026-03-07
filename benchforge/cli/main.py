@@ -28,6 +28,7 @@ from rich import box
 from benchforge.core.scanner import scan_project, ScanResult
 from benchforge.core.analyzer import analyze_project, AnalysisResult
 from benchforge.core.scoring import compute_score, ScoreResult
+from benchforge.core.config import load_config, BenchForgeConfig
 
 # Ensure UTF-8 output on Windows (cp1250 console cannot render many chars).
 if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
@@ -93,6 +94,20 @@ def _print_json_output(scan: "ScanResult", analysis: "AnalysisResult", score: "S
         "score": _score_to_dict(score),
     }
     click.echo(json.dumps(payload, indent=2, ensure_ascii=False))
+
+
+# ---------------------------------------------------------------------------
+# Config helpers
+# ---------------------------------------------------------------------------
+
+def _load_project_config(project_path: Path) -> BenchForgeConfig:
+    """Load .benchforge.toml from project_path. Returns defaults on error."""
+    try:
+        return load_config(project_path)
+    except ValueError as exc:
+        err_console.print(f"[yellow]Config warning:[/yellow] {exc} — using defaults.")
+        from benchforge.core.config import BenchForgeConfig as _Cfg
+        return _Cfg()
 
 
 # ---------------------------------------------------------------------------
@@ -263,6 +278,8 @@ def analyze(path: str, use_ai: bool, output_format: str) -> None:
     if output_format == "text":
         console.print(f"\n[bold]BenchForge[/bold] — analyzing [cyan]{project_path}[/cyan]\n")
 
+    cfg = _load_project_config(project_path)
+
     if output_format == "json":
         # JSON mode: run pipeline silently, no progress output
         try:
@@ -274,7 +291,7 @@ def analyze(path: str, use_ai: bool, output_format: str) -> None:
             click.echo(json.dumps({"error": "No files found in the given directory."}, indent=2))
             sys.exit(0)
         analysis = analyze_project(scan)
-        score = compute_score(analysis)
+        score = compute_score(analysis, config=cfg)
         _print_json_output(scan, analysis, score)
         return
 
@@ -302,7 +319,10 @@ def analyze(path: str, use_ai: bool, output_format: str) -> None:
         analysis = analyze_project(scan)
 
         progress.update(task, description="Computing scores...")
-        score = compute_score(analysis)
+        score = compute_score(analysis, config=cfg)
+
+    if cfg.config_path is not None:
+        console.print(f"[dim]Config: {cfg.config_path}[/dim]\n")
 
     _print_scan_summary(scan)
     _print_issues(analysis)
@@ -451,6 +471,8 @@ def report(path: str, output: str, use_ai: bool) -> None:
 
     console.print(f"\n[bold]BenchForge[/bold] — generating report for [cyan]{project_path}[/cyan]\n")
 
+    cfg = _load_project_config(project_path)
+
     with Progress(
         SpinnerColumn(),
         TextColumn("[progress.description]{task.description}"),
@@ -474,7 +496,7 @@ def report(path: str, output: str, use_ai: bool) -> None:
         analysis = analyze_project(scan)
 
         progress.update(task, description="Computing scores...")
-        score = compute_score(analysis)
+        score = compute_score(analysis, config=cfg)
 
         progress.update(task, description="Building report data...")
         scan_summary = {
