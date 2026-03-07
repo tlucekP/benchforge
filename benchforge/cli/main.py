@@ -733,6 +733,186 @@ def _print_roast(result: "RoastResult") -> None:
 
 
 # ---------------------------------------------------------------------------
+# challenge command
+# ---------------------------------------------------------------------------
+
+@cli.command()
+@click.argument("paths", nargs=-1, required=True, metavar="PATH...")
+@click.option(
+    "--labels", default=None,
+    help="Comma-separated display labels matching each PATH (e.g. 'human,gpt4,claude').",
+)
+@click.option(
+    "--format", "output_format",
+    type=click.Choice(["text", "json"], case_sensitive=False),
+    default="text",
+    show_default=True,
+    help="Output format: text (default) or json.",
+)
+def challenge(paths: tuple[str, ...], labels: str | None, output_format: str) -> None:
+    """Compare multiple implementations and produce a ranked leaderboard.
+
+    Provide 2 or more PATH arguments:
+
+        benchforge challenge human/ gpt4/ claude/
+
+    Use --labels for custom display names:
+
+        benchforge challenge human/ gpt4/ --labels "Human,GPT-4"
+    """
+    from benchforge.core.challenge import run_challenge, ChallengeResult
+
+    if len(paths) < 2:
+        err_console.print("Error: challenge requires at least 2 paths.")
+        sys.exit(1)
+
+    resolved: list[Path] = []
+    for p in paths:
+        try:
+            resolved.append(_resolve_path(p))
+        except click.BadParameter as exc:
+            err_console.print(f"Error: {exc}")
+            sys.exit(1)
+
+    label_list: list[str] | None = None
+    if labels:
+        label_list = [l.strip() for l in labels.split(",")]
+
+    if output_format == "text":
+        label_str = " vs ".join(
+            label_list[i] if label_list and i < len(label_list) else resolved[i].name
+            for i in range(len(resolved))
+        )
+        console.print(f"\n[bold]BenchForge Challenge[/bold] — {label_str}\n")
+
+    cfg = _load_project_config(resolved[0])
+
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[progress.description]{task.description}"),
+        TimeElapsedColumn(),
+        console=console,
+        transient=True,
+        disable=(output_format == "json"),
+    ) as progress:
+        task = progress.add_task(f"Analyzing {len(resolved)} implementations...", total=None)
+        try:
+            result: ChallengeResult = run_challenge(resolved, labels=label_list, config=cfg)
+        except (ValueError, NotADirectoryError) as exc:
+            err_console.print(f"Error: {exc}")
+            sys.exit(1)
+        progress.update(task, description="Done.")
+
+    if output_format == "json":
+        def _snap_to_dict(snap: object) -> dict:
+            from benchforge.core.comparator import ProjectSnapshot
+            assert isinstance(snap, ProjectSnapshot)
+            return {
+                "label": snap.label,
+                "path": str(snap.path),
+                "scan": _scan_to_dict(snap.scan),
+                "analysis": _analysis_to_dict(snap.analysis),
+                "score": _score_to_dict(snap.score),
+            }
+        payload = {
+            "entries": [
+                {"rank": e.rank, "snapshot": _snap_to_dict(e.snapshot)}
+                for e in result.entries
+            ],
+            "winner": result.winner.label if result.winner else None,
+            "is_tie": result.is_tie,
+            "category_rankings": [
+                {
+                    "category": cr.category,
+                    "ranked": cr.ranked_labels,
+                    "scores": cr.scores,
+                }
+                for cr in result.category_rankings
+            ],
+        }
+        click.echo(json.dumps(payload, indent=2, ensure_ascii=False))
+        return
+
+    _print_challenge(result)
+
+
+def _print_challenge(result: "ChallengeResult") -> None:
+    """Render the challenge leaderboard to the terminal."""
+    from benchforge.core.challenge import ChallengeResult
+    assert isinstance(result, ChallengeResult)
+
+    # --- Leaderboard table ---
+    table = Table(title="Challenge Leaderboard", box=box.ROUNDED, show_lines=True)
+    table.add_column("Rank", width=6, justify="center")
+    table.add_column("Implementation")
+    table.add_column("Score", justify="center", width=7)
+    table.add_column("Performance", justify="center", width=12)
+    table.add_column("Maintainability", justify="center", width=15)
+    table.add_column("Memory", justify="center", width=8)
+    table.add_column("Issues", justify="right", width=7)
+    table.add_column("Complexity", justify="right", width=10)
+
+    rank_styles = {1: "bold gold1", 2: "bold silver", 3: "bold orange3"}
+
+    for entry in result.entries:
+        snap = entry.snapshot
+        rank_style = rank_styles.get(entry.rank, "dim")
+        rank_cell = f"[{rank_style}]#{entry.rank}[/{rank_style}]"
+
+        sc = snap.score
+        bc = _score_color(sc.benchforge_score)
+        score_cell = f"[bold {bc}]{sc.benchforge_score}[/bold {bc}]"
+
+        table.add_row(
+            rank_cell,
+            snap.label,
+            score_cell,
+            f"[{_score_color(sc.performance)}]{sc.performance}[/{_score_color(sc.performance)}]",
+            f"[{_score_color(sc.maintainability)}]{sc.maintainability}[/{_score_color(sc.maintainability)}]",
+            f"[{_score_color(sc.memory)}]{sc.memory}[/{_score_color(sc.memory)}]",
+            str(snap.analysis.total_issues),
+            str(snap.analysis.avg_complexity),
+        )
+
+    console.print(table)
+
+    # --- Category rankings ---
+    cat_table = Table(title="Category Rankings (best -> worst)", box=box.ROUNDED)
+    cat_table.add_column("Category", style="dim")
+    cat_table.add_column("Ranking")
+
+    for cr in result.category_rankings:
+        ranked_str = " > ".join(cr.ranked_labels)
+        cat_table.add_row(cr.category, ranked_str)
+
+    console.print(cat_table)
+
+    # --- Winner banner ---
+    if result.is_tie:
+        console.print(
+            Panel(
+                "[yellow]It's a tie![/yellow] Multiple implementations share the top score.",
+                title="[bold]Result[/bold]",
+                border_style="yellow",
+                expand=False,
+            )
+        )
+    elif result.winner:
+        w = result.winner
+        top_score = w.score.benchforge_score
+        color = _score_color(top_score)
+        console.print(
+            Panel(
+                f"[bold {color}]{w.label}[/bold {color}] wins with score "
+                f"[bold {color}]{top_score}[/bold {color}]/100",
+                title="[bold]Winner[/bold]",
+                border_style=color,
+                expand=False,
+            )
+        )
+
+
+# ---------------------------------------------------------------------------
 # compare command
 # ---------------------------------------------------------------------------
 
