@@ -13,6 +13,7 @@ Business logic lives in core modules. This file handles only:
 
 from __future__ import annotations
 
+import io
 import sys
 from pathlib import Path
 
@@ -26,7 +27,12 @@ from benchforge.core.scanner import scan_project, ScanResult
 from benchforge.core.analyzer import analyze_project, AnalysisResult
 from benchforge.core.scoring import compute_score, ScoreResult
 
-# Force UTF-8 output on Windows to handle non-ASCII characters in rich output.
+# Ensure UTF-8 output on Windows (cp1250 console cannot render many chars).
+if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
+if sys.stderr.encoding and sys.stderr.encoding.lower() != "utf-8":
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
+
 console = Console(highlight=False)
 err_console = Console(stderr=True, style="bold red", highlight=False)
 
@@ -145,9 +151,40 @@ def cli() -> None:
 # analyze command
 # ---------------------------------------------------------------------------
 
+def _print_ai_insight(insight: object) -> None:
+    """Print AI insight panel to the terminal if available."""
+    from benchforge.ai.interpreter import AIInsight
+    if not isinstance(insight, AIInsight):
+        return
+    if not insight.available:
+        console.print(f"[dim]AI: {insight.summary}[/dim]")
+        return
+    lines = []
+    if insight.summary:
+        lines.append(insight.summary)
+    if insight.issue_insights:
+        lines.append("")
+        for item in insight.issue_insights:
+            lines.append(f"  -> {item}")
+    if insight.top_suggestion:
+        lines.append("")
+        lines.append(f"[bold]Top suggestion:[/bold] {insight.top_suggestion}")
+    lines.append(f"\n[dim]Model: {insight.model}[/dim]")
+    console.print(
+        Panel(
+            "\n".join(lines),
+            title="[bold cyan]AI Insight[/bold cyan] [dim](Mistral AI)[/dim]",
+            border_style="cyan",
+            expand=False,
+        )
+    )
+
+
 @cli.command()
 @click.argument("path", default=".", metavar="PATH")
-def analyze(path: str) -> None:
+@click.option("--ai", "use_ai", is_flag=True, default=False,
+              help="Run AI interpretation (requires MISTRAL_API_KEY).")
+def analyze(path: str, use_ai: bool) -> None:
     """Analyze a project directory for code quality issues.
 
     PATH defaults to the current directory.
@@ -175,12 +212,36 @@ def analyze(path: str) -> None:
 
     # Analyzer
     analysis = analyze_project(scan)
-
     _print_issues(analysis)
 
     # Scoring
     score = compute_score(analysis)
     _print_scores(score)
+
+    # Optional AI interpretation
+    if use_ai:
+        from benchforge.ai.interpreter import interpret, _is_available
+        from benchforge.report.html_report import build_report_data
+        if not _is_available():
+            console.print("[yellow]AI: MISTRAL_API_KEY not set — skipping AI insight.[/yellow]")
+        else:
+            console.print("[dim]Requesting AI insight...[/dim]")
+            scan_summary = {
+                "file_count": scan.file_count,
+                "primary_language": scan.primary_language,
+                "total_size_kb": scan.total_size_kb,
+                "modules": scan.modules,
+                "languages": scan.languages,
+            }
+            report_data = build_report_data(
+                project_path=project_path,
+                scan_summary=scan_summary,
+                analysis=analysis,
+                score=score,
+            )
+            insight = interpret(report_data)
+            if insight:
+                _print_ai_insight(insight)
 
 
 # ---------------------------------------------------------------------------
@@ -278,13 +339,14 @@ def benchmark(path: str, runs: int, target_file: str | None) -> None:
 @cli.command()
 @click.argument("path", default=".", metavar="PATH")
 @click.option(
-    "--output",
-    "-o",
+    "--output", "-o",
     default="benchforge_report.html",
     show_default=True,
     help="Output HTML file path.",
 )
-def report(path: str, output: str) -> None:
+@click.option("--ai", "use_ai", is_flag=True, default=False,
+              help="Include AI interpretation in report (requires MISTRAL_API_KEY).")
+def report(path: str, output: str, use_ai: bool) -> None:
     """Run full analysis and generate an HTML report.
 
     PATH defaults to the current directory.
@@ -327,6 +389,17 @@ def report(path: str, output: str) -> None:
         analysis=analysis,
         score=score,
     )
+
+    # Optional AI interpretation
+    if use_ai:
+        from benchforge.ai.interpreter import interpret, _is_available
+        if not _is_available():
+            console.print("[yellow]AI: MISTRAL_API_KEY not set — report will not include AI insight.[/yellow]")
+        else:
+            console.print("[dim]Requesting AI insight...[/dim]")
+            insight = interpret(report_data)
+            if insight:
+                report_data.ai_insight = insight
 
     output_path = Path(output).resolve()
 

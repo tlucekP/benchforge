@@ -133,6 +133,34 @@
 </div>
 {% endif %}
 
+<!-- ===== AI INSIGHT ===== -->
+{% if ai_insight and ai_insight.available %}
+<h2>AI Insight <span style="font-size:0.7rem;color:#64748b;font-weight:400;">powered by Mistral AI</span></h2>
+<div style="background:#0f1f2e;border:1px solid #1d4ed8;border-radius:10px;padding:1.25rem;margin-bottom:2rem;">
+  {% if ai_insight.summary %}
+  <p style="color:#e2e8f0;margin-bottom:1rem;">{{ ai_insight.summary }}</p>
+  {% endif %}
+  {% if ai_insight.issue_insights %}
+  <div style="margin-bottom:1rem;">
+    <div style="font-size:0.75rem;color:#64748b;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:0.5rem;">Issue Insights</div>
+    {% for insight in ai_insight.issue_insights %}
+    <div style="color:#93c5fd;font-size:0.875rem;margin-bottom:0.3rem;">&#x2192; {{ insight }}</div>
+    {% endfor %}
+  </div>
+  {% endif %}
+  {% if ai_insight.top_suggestion %}
+  <div style="background:#1e3a5f;border-left:3px solid #3b82f6;padding:0.75rem 1rem;border-radius:4px;">
+    <div style="font-size:0.75rem;color:#64748b;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:0.25rem;">Top Suggestion</div>
+    <div style="color:#f8fafc;font-weight:600;">{{ ai_insight.top_suggestion }}</div>
+  </div>
+  {% endif %}
+  <div style="font-size:0.7rem;color:#334155;margin-top:0.75rem;">Model: {{ ai_insight.model }}</div>
+</div>
+{% elif ai_insight and not ai_insight.available %}
+<h2>AI Insight</h2>
+<div class="info-box">{{ ai_insight.summary }}</div>
+{% endif %}
+
 <!-- ===== PROJECT SUMMARY ===== -->
 <h2>Project Summary</h2>
 <div class="summary-grid">

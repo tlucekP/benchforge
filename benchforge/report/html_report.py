@@ -26,6 +26,7 @@ class ReportData:
     score: ScoreResult
     benchmark: BenchmarkResult | None = None
     all_issues: list[Issue] = field(default_factory=list)
+    ai_insight: object | None = None         # AIInsight | None (optional import)
 
 
 def _build_jinja_env() -> Environment:
@@ -74,6 +75,7 @@ def generate_html_report(
         benchmark=report_data.benchmark,
         file_analyses=report_data.analysis.files,
         issue_breakdown=report_data.analysis.issue_breakdown,
+        ai_insight=report_data.ai_insight,
     )
 
     resolved = output_path.resolve()
