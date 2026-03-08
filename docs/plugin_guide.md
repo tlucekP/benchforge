@@ -10,9 +10,11 @@ Audience: Contributors who want to add language support
 
 BenchForge currently analyzes **Python** projects.
 
-The plugin architecture is already in place. Adding support for another language means implementing one class that satisfies the `AnalyzerPlugin` protocol, plus updating one routing function in the core.
+The plugin architecture is already in place. Getting basic static-analysis integration for a new language requires implementing one class that satisfies the `AnalyzerPlugin` protocol, plus updating one routing function in the core.
 
-This guide walks through both steps honestly — including the part that is not wired up yet.
+That is enough for issues to appear in the output. Full parity with Python — scored metrics, benchmark data, duplicate detection — requires additional work per language. The status table below is honest about what is ready and what is not.
+
+This guide walks through both steps — including the part that is not wired up yet.
 
 If you want the product philosophy first, see [`design_rulebook.md`](design_rulebook.md).
 If you want the project direction, see [`roadmap.md`](roadmap.md).
@@ -178,7 +180,7 @@ This is tracked on the roadmap as the next infrastructure step before the first 
 ## Honest Constraints
 
 **Static analysis tooling varies per language.**
-Python gets `ast` and `radon` for free. Other languages may require external tools (tree-sitter, linters, compilers). Make sure any subprocess dependency is documented in `docs/DEV_SETUP.md` and listed in `requirements.txt` or a language-specific extras group.
+Python gets `ast` and `radon` for free. Other languages may require external tools (tree-sitter, linters, compilers). Document any new dependency in `CONTRIBUTING.md` and list it in `requirements.txt` or a language-specific extras group. If the tool requires a system-level installer (e.g. a runtime or native library), note the installation steps there too.
 
 **Complexity and maintainability metrics differ per language.**
 The scoring engine expects `avg_complexity` and `avg_maintainability` values in the 0–100 range. If your language's tooling produces different scales, normalize them before returning. The scoring engine does not know what tool produced the number.
