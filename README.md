@@ -36,7 +36,7 @@ BenchForge helps you **prioritize where to look first**. It does not make the fi
 
 AI can generate code faster than humans can review it.
 
-That creates a new problem: code may run, look tidy, and still be slow, hard to maintain, or structurally fragile. BenchForge gives you a fast first pass so you can review with better context instead of trusting vibes or a single number.
+That creates a new problem: code may run, look tidy, and still be slow, hard to maintain, or structurally fragile. BenchForge gives you a fast first pass so you can review with better context instead of trusting vibes or a single number. BenchForge is especially useful when comparing human-written and AI-generated implementations.
 
 For product and design principles, see [`docs/design_rulebook.md`](docs/design_rulebook.md).
 

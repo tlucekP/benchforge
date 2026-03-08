@@ -187,7 +187,7 @@ benchforge:
 }
 ```
 
-`score_gap` is `min_score - actual_score`:
+`score_gap = min_score - actual_score`:
 
 - negative or zero means passing
 - positive means how many points are still needed
