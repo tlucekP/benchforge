@@ -134,6 +134,9 @@ class TestParseResponse:
         assert isinstance(insights, list)
 
 
+mistralai = pytest.importorskip("mistralai", reason="mistralai not installed (optional dependency)")
+
+
 class TestInterpret:
     def test_returns_none_without_api_key(
         self, monkeypatch, single_file_project: Path
