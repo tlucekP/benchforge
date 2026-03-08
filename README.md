@@ -3,6 +3,7 @@
 ![Python](https://img.shields.io/badge/python-3.10%2B-blue)
 ![License](https://img.shields.io/github/license/tlucekP/benchforge)
 ![CI](https://img.shields.io/github/actions/workflow/status/tlucekP/benchforge/tests.yml?branch=main)
+![Release](https://img.shields.io/github/v/release/tlucekP/benchforge)
 
 **BenchForge** is a code quality and benchmarking tool built for the **AI coding era**.
 
@@ -200,8 +201,6 @@ The `report` command runs the full pipeline and generates an HTML report:
 benchforge report .
 ```
 
-![BenchForge detected issues](assets/screenshots/detected_issues.png)
-
 ### `analyze`
 
 ```bash
@@ -278,6 +277,8 @@ benchforge pr-guard . --max-drop 5 --format json
 For CI setup examples, see [`docs/ci_integration.md`](docs/ci_integration.md).
 
 ## Example Output
+
+![BenchForge detected issues](assets/screenshots/detected_issues.png)
 
 ![BenchForge CLI analysis output](assets/screenshots/analyze_cli.png)
 
