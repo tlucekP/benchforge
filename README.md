@@ -1,5 +1,8 @@
 # BenchForge
 
+![Python](https://img.shields.io/badge/python-3.10%2B-blue)
+![License](https://img.shields.io/github/license/tlucekP/benchforge)
+
 **BenchForge** is a code quality and benchmarking tool built for the **AI coding era**.
 
 It gives developers, especially **vibecoders**, fast and honest signal about their code:
