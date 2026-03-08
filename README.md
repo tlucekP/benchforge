@@ -1,7 +1,5 @@
 # BenchForge
 
-![BenchForge HTML Report](assets/screenshots/html_report.png)
-
 **BenchForge** is a code quality and benchmarking tool built for the **AI coding era**.
 
 It gives developers, especially **vibecoders**, fast and honest signal about their code:
@@ -9,6 +7,8 @@ It gives developers, especially **vibecoders**, fast and honest signal about the
 > *What structural issues does this code have, and where should I look first?*
 
 BenchForge scans your project, finds structural problems with static analysis, can measure runtime and memory, and produces a **score with a breakdown of what drove it**.
+
+![BenchForge HTML Report](assets/screenshots/html_report.png)
 
 ## Start Here
 
