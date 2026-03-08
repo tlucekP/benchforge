@@ -43,14 +43,10 @@ That creates a new problem: code may run, look tidy, and still be slow, hard to 
 BenchForge can compare multiple implementations of the same problem side by side.
 
 ```bash
-benchforge challenge human/ gpt/ claude/
+benchforge challenge human/ ai_generated/ --labels "Human,AI-generated"
 ```
 
-```text
-Human implementation:   82
-GPT implementation:     74
-Claude implementation:  79
-```
+![BenchForge challenge leaderboard](assets/screenshots/challenge.png)
 
 BenchForge helps you objectively evaluate AI-generated code instead of relying on intuition.
 
@@ -94,6 +90,8 @@ benchforge analyze . --heatmap
 # JSON output (for scripts / CI)
 benchforge analyze . --format json
 ```
+
+![BenchForge file heatmap](assets/screenshots/heatmap.png)
 
 ## Why BenchForge Turns Findings Into a Score
 
@@ -190,6 +188,14 @@ Want the detailed memory methodology? See [`docs/scoring.md`](docs/scoring.md).
 | `benchforge ci PATH` | CI quality gate (exits 1 when score < threshold) |
 | `benchforge pr-guard PATH` | PR regression check (exits 1 when score dropped too much) |
 
+The `report` command runs the full pipeline and generates an HTML report:
+
+```bash
+benchforge report .
+```
+
+![BenchForge HTML report](assets/screenshots/html_report.png)
+
 ### `analyze`
 
 ```bash
@@ -267,20 +273,7 @@ For CI setup examples, see [`docs/ci_integration.md`](docs/ci_integration.md).
 
 ## Example Output
 
-```text
-Project: 38 files
-Language: Python
-
-Performance Score: 78
-Maintainability Score: 83
-Memory Score: 71
-
-Detected Issues:
-- nested loops
-- long function in data_parser.py
-
-BenchForge Score: 77
-```
+![BenchForge CLI analysis output](assets/screenshots/analyze_cli.png)
 
 ## Configuration
 
