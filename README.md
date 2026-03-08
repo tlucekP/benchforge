@@ -38,6 +38,22 @@ AI can generate code faster than humans can review it.
 
 That creates a new problem: code may run, look tidy, and still be slow, hard to maintain, or structurally fragile. BenchForge gives you a fast first pass so you can review with better context instead of trusting vibes or a single number. BenchForge is especially useful when comparing human-written and AI-generated implementations.
 
+## AI vs Human Code Challenge
+
+BenchForge can compare multiple implementations of the same problem side by side.
+
+```bash
+benchforge challenge human/ gpt/ claude/
+```
+
+```text
+Human implementation:   82
+GPT implementation:     74
+Claude implementation:  79
+```
+
+BenchForge helps you objectively evaluate AI-generated code instead of relying on intuition.
+
 For product and design principles, see [`docs/design_rulebook.md`](docs/design_rulebook.md).
 
 ## What You Get After Running BenchForge
