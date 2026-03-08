@@ -1,12 +1,13 @@
 # BenchForge CI Integration
 
-BenchForge includes a built-in quality gate (`benchforge ci`) designed for use in CI/CD pipelines.
-The command exits with code **1** when the BenchForge score falls below a configured threshold,
-which causes most CI systems to fail the build automatically.
+BenchForge includes a built-in quality gate, `benchforge ci`, for CI/CD pipelines.
+The command exits with code **1** when the BenchForge score falls below a configured threshold, which causes most CI systems to fail the build automatically.
+
+Use this when you want a simple answer to: "Did this branch stay above our agreed minimum score?"
 
 ---
 
-## Quick start
+## Quick Start
 
 ```bash
 # Pass if score >= 60 (default threshold)
@@ -22,21 +23,35 @@ benchforge ci . --min-score 70 --format json
 Exit codes:
 
 | Code | Meaning |
-|------|---------|
-| `0`  | Score >= threshold — quality gate passed |
-| `1`  | Score < threshold — quality gate failed |
+|---|---|
+| `0` | Score >= threshold, quality gate passed |
+| `1` | Score < threshold, quality gate failed |
 
 ---
 
-## Configuring the threshold
+## Beginner Guidance
 
-### Via CLI flag (one-off override)
+A good way to start:
+
+- begin with a **lower threshold** such as 50 or 60
+- fix the noisiest issues first
+- raise the threshold gradually as the codebase improves
+
+BenchForge should help teams add a useful guardrail without turning CI into a wall of red failures on day one.
+
+For the scoring methodology behind that threshold, see [`scoring.md`](scoring.md).
+
+---
+
+## Configuring the Threshold
+
+### Via CLI flag
 
 ```bash
 benchforge ci . --min-score 80
 ```
 
-### Via `.benchforge.toml` (project-level default)
+### Via `.benchforge.toml`
 
 ```toml
 [ci]
@@ -106,8 +121,8 @@ jobs:
           script: |
             const fs = require('fs');
             const result = JSON.parse(fs.readFileSync('benchforge_result.json'));
-            const icon = result.passed ? '✅' : '❌';
-            const body = `${icon} **BenchForge Score: ${result.actual_score}/100** (threshold: ${result.min_score})`;
+            const icon = result.passed ? 'PASS' : 'FAIL';
+            const body = `${icon} BenchForge Score: ${result.actual_score}/100 (threshold: ${result.min_score})`;
             github.rest.issues.createComment({
               issue_number: context.issue.number,
               owner: context.repo.owner,
@@ -135,7 +150,7 @@ benchforge:
 
 ---
 
-## JSON output reference
+## JSON Output Reference
 
 `benchforge ci . --format json` produces:
 
@@ -173,13 +188,14 @@ benchforge:
 ```
 
 `score_gap` is `min_score - actual_score`:
-- negative or zero → passing
-- positive → how many points are still needed
+
+- negative or zero means passing
+- positive means how many points are still needed
 
 ---
 
 ## Tips
 
-- Start with a **low threshold** (e.g. 50) and raise it incrementally as the codebase improves.
 - Store the threshold in `.benchforge.toml` so every developer uses the same gate locally.
 - Run `benchforge analyze .` locally before pushing to see the full issue breakdown.
+- If you need regression protection against drops, pair `benchforge ci` with `benchforge pr-guard`.
