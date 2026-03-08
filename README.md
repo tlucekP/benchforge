@@ -2,6 +2,7 @@
 
 ![Python](https://img.shields.io/badge/python-3.10%2B-blue)
 ![License](https://img.shields.io/github/license/tlucekP/benchforge)
+![CI](https://img.shields.io/github/actions/workflow/status/tlucekP/benchforge/tests.yml?branch=main)
 
 **BenchForge** is a code quality and benchmarking tool built for the **AI coding era**.
 
