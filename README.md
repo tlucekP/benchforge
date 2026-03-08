@@ -14,6 +14,7 @@ BenchForge scans your project, finds structural problems with static analysis, c
 - For CI setup examples, see [`docs/ci_integration.md`](docs/ci_integration.md).
 - For product and design principles, see [`docs/design_rulebook.md`](docs/design_rulebook.md).
 - For project direction, see [`docs/roadmap.md`](docs/roadmap.md).
+- Want to add a language plugin? See [`docs/plugin_guide.md`](docs/plugin_guide.md).
 
 ## What BenchForge Is
 
@@ -399,6 +400,8 @@ Areas where help is especially valuable:
 - language support beyond Python
 - benchmarking strategies
 - developer UX and output readability
+
+Want to add support for a new language? The plugin architecture is already in place. See [`docs/plugin_guide.md`](docs/plugin_guide.md) for the protocol, a step-by-step walkthrough, and an honest description of what is wired up vs. what still needs work.
 
 ## License
 

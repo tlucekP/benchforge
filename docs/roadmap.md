@@ -77,4 +77,10 @@ If you want the philosophy behind the roadmap, see [`design_rulebook.md`](design
 
 ## Next
 
+- Plugin routing: `analyze_project()` dispatches to registered plugins by file extension — prerequisite for the first non-Python language
 - Improve docs and examples for multi-language and monorepo setups
+
+## Future
+
+- First community language plugin (JavaScript / TypeScript candidate)
+- Scoring extensions for non-Python issue categories
