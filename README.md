@@ -1,5 +1,7 @@
 # BenchForge
 
+![BenchForge HTML Report](assets/screenshots/html_report.png)
+
 **BenchForge** is a code quality and benchmarking tool built for the **AI coding era**.
 
 It gives developers, especially **vibecoders**, fast and honest signal about their code:
@@ -194,7 +196,7 @@ The `report` command runs the full pipeline and generates an HTML report:
 benchforge report .
 ```
 
-![BenchForge HTML report](assets/screenshots/html_report.png)
+![BenchForge detected issues](assets/screenshots/detected_issues.png)
 
 ### `analyze`
 
