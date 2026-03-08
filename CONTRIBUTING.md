@@ -12,6 +12,7 @@ Please read these documents first:
 - [`docs/scoring.md`](docs/scoring.md) for the scoring model and terminology
 - [`docs/design_rulebook.md`](docs/design_rulebook.md) for project philosophy and design principles
 - [`docs/roadmap.md`](docs/roadmap.md) for current direction
+- [`docs/plugin_guide.md`](docs/plugin_guide.md) if you want to add language support
 
 ## What Kind of Contributions Are Helpful
 

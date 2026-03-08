@@ -156,7 +156,7 @@ Examples:
 
 ## 3.6 Modular Architecture
 
-BenchForge should support plugins.
+BenchForge supports plugins via the `AnalyzerPlugin` protocol.
 
 Core system responsibilities:
 
@@ -172,6 +172,8 @@ Plugins can extend:
 - analysis modules
 - benchmark strategies
 - AI interpretation
+
+The plugin protocol, registry, and extension routing helper are already in place. See [`plugin_guide.md`](plugin_guide.md) for the full contributor walkthrough.
 
 ------------------------------------------------------------------------
 
@@ -343,29 +345,28 @@ Avoid heavy dependencies unless necessary.
 
 ------------------------------------------------------------------------
 
-# 12. Future Evolution
+# 12. Current State and Future Evolution
 
-BenchForge development stages:
+### Completed
 
-### Stage 1 - MVP
+- Core benchmarking and static analysis (v1)
+- AI interpretation layer — Mistral AI, `--ai` flag (v1.1 / v1.7)
+- Implementation comparison tools — `compare`, `challenge`, `roast` (v1.1–v1.3)
+- CI and workflow integration — `ci`, `pr-guard`, `badge` (v1.4–v1.5)
+- Community ecosystem foundations — plugin protocol, `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `SECURITY.md`, issue and PR templates (v1.8+)
 
-Core benchmarking functionality.
+### Next
 
-### Stage 2
+- Plugin routing: `analyze_project()` dispatches to registered plugins by file extension — prerequisite for the first non-Python language
+- Multi-language and monorepo examples
 
-AI interpretation layer.
+### Future
 
-### Stage 3
+- First community language plugin (JavaScript / TypeScript candidate)
+- Scoring extensions for non-Python issue categories
+- Benchmark sharing and community scenarios
 
-Implementation comparison tools.
-
-### Stage 4
-
-CI and workflow integration.
-
-### Stage 5
-
-Community ecosystem and benchmark sharing.
+For detailed version history, see [`roadmap.md`](roadmap.md).
 
 ------------------------------------------------------------------------
 
