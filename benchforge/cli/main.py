@@ -16,6 +16,7 @@ from __future__ import annotations
 import io
 import json
 import sys
+from datetime import date
 from pathlib import Path
 
 import click
@@ -126,6 +127,30 @@ def _resolve_path(path_str: str) -> Path:
     if not p.is_dir():
         raise click.BadParameter(f"Path is not a directory: {p}", param_hint="PATH")
     return p
+
+
+def _report_archive_root() -> Path:
+    """Return the repository-level folder used to archive HTML reports."""
+    return Path(__file__).resolve().parents[2] / "HTML_reports"
+
+
+def _default_report_output_path(project_path: Path, report_date: date | None = None) -> Path:
+    """Build a stable archive path for an HTML report without overwriting older files."""
+    project_name = project_path.name
+    report_day = (report_date or date.today()).isoformat()
+    report_dir = _report_archive_root() / project_name
+    base_name = f"{project_name}_{report_day}"
+    candidate = report_dir / f"{base_name}.html"
+
+    if not candidate.exists():
+        return candidate
+
+    suffix = 2
+    while True:
+        candidate = report_dir / f"{base_name}_{suffix}.html"
+        if not candidate.exists():
+            return candidate
+        suffix += 1
 
 
 def _score_color(score: int) -> str:
@@ -522,13 +547,12 @@ def benchmark(path: str, runs: int, target_file: str | None) -> None:
 @click.argument("path", default=".", metavar="PATH")
 @click.option(
     "--output", "-o",
-    default="benchforge_report.html",
-    show_default=True,
-    help="Output HTML file path.",
+    default=None,
+    help="Output HTML file path. Defaults to HTML_reports/<repo>/<repo>_<date>.html.",
 )
 @click.option("--ai", "use_ai", is_flag=True, default=False,
               help="Include AI interpretation in report (requires MISTRAL_API_KEY).")
-def report(path: str, output: str, use_ai: bool) -> None:
+def report(path: str, output: str | None, use_ai: bool) -> None:
     """Run full analysis and generate an HTML report.
 
     PATH defaults to the current directory.
@@ -597,7 +621,7 @@ def report(path: str, output: str, use_ai: bool) -> None:
                 if insight:
                     report_data.ai_insight = insight
 
-    output_path = Path(output).resolve()
+    output_path = Path(output).resolve() if output else _default_report_output_path(project_path)
 
     try:
         written = generate_html_report(report_data, output_path)

@@ -9,6 +9,7 @@ import pytest
 from click.testing import CliRunner
 
 from benchforge.cli.main import cli
+from benchforge.cli import main as cli_main
 
 
 @pytest.fixture()
@@ -99,6 +100,18 @@ class TestAnalyzeCommand:
 
 
 class TestReportCommand:
+    def test_report_uses_archive_path_by_default(
+        self, runner: CliRunner, single_file_project: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        archive_root = tmp_path / "HTML_reports"
+        monkeypatch.setattr(cli_main, "_report_archive_root", lambda: archive_root)
+
+        result = runner.invoke(cli, ["report", str(single_file_project)])
+
+        expected = archive_root / single_file_project.name / f"{single_file_project.name}_{cli_main.date.today().isoformat()}.html"
+        assert result.exit_code == 0
+        assert expected.exists()
+
     def test_report_creates_html_file(
         self, runner: CliRunner, single_file_project: Path, tmp_path: Path
     ) -> None:
@@ -116,6 +129,23 @@ class TestReportCommand:
         runner.invoke(cli, ["report", str(single_file_project), "--output", str(output)])
         content = output.read_text(encoding="utf-8")
         assert "BenchForge" in content
+
+    def test_report_adds_suffix_when_default_name_exists(
+        self, runner: CliRunner, single_file_project: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        archive_root = tmp_path / "HTML_reports"
+        project_dir = archive_root / single_file_project.name
+        project_dir.mkdir(parents=True)
+        existing = project_dir / f"{single_file_project.name}_{cli_main.date.today().isoformat()}.html"
+        existing.write_text("old report", encoding="utf-8")
+        monkeypatch.setattr(cli_main, "_report_archive_root", lambda: archive_root)
+
+        result = runner.invoke(cli, ["report", str(single_file_project)])
+
+        expected = project_dir / f"{single_file_project.name}_{cli_main.date.today().isoformat()}_2.html"
+        assert result.exit_code == 0
+        assert existing.read_text(encoding="utf-8") == "old report"
+        assert expected.exists()
 
     def test_report_invalid_path(self, runner: CliRunner, tmp_path: Path) -> None:
         nonexistent = tmp_path / "ghost"
